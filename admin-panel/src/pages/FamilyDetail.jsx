@@ -11,6 +11,7 @@ import {
 import StatusBadge from '../components/common/StatusBadge';
 import { SkeletonStatGrid } from '../components/common/LoadingState';
 import EmptyState from '../components/common/EmptyState';
+import FamilyEditForm from '../components/FamilyEditForm';
 
 function KV({ label, value }) {
   if (value === null || value === undefined || value === '') return null;
@@ -49,7 +50,7 @@ function DetailCard({ title, icon, accent = 'slate', children, className = '' })
 
 function formatAddress(a) {
   if (!a) return '';
-  return [a.addressLine1, a.addressLine2, a.city, a.district, a.state, a.pinCode, a.country]
+  return [a.addressLine1, a.village, a.city]
     .filter(Boolean).join(', ') || '—';
 }
 
@@ -231,9 +232,9 @@ function MemberRow({ m, idx, open, onToggle }) {
           </div>
         </td>
         <td className="px-3 sm:px-4 py-3.5 align-top text-sm text-slate-700">{familyRelation(m)}</td>
-        <td className="px-3 sm:px-4 py-3.5 align-top text-sm text-slate-600">{m.age || '—'}</td>
+        <td className="px-3 sm:px-4 py-3.5 align-top text-sm text-slate-600">{m.dateOfBirthOrAge || '—'}</td>
         <td className="px-3 sm:px-4 py-3.5 align-top text-sm text-slate-600">{m.gender || '—'}</td>
-        <td className="px-3 sm:px-4 py-3.5 align-top text-sm text-slate-600">{m.maritalStatus === 'Single' ? (m.engagementStatus || '—') : '—'}</td>
+        <td className="px-3 sm:px-4 py-3.5 align-top text-sm text-slate-600">{m.maritalStatus || '—'}</td>
         <td className="px-3 sm:px-4 py-3.5 align-top">
           <StatusBadge status={familyStatus(m)} />
         </td>
@@ -268,6 +269,7 @@ export default function FamilyDetail() {
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [openRows, setOpenRows] = useState({});
 
   useEffect(() => {
@@ -303,6 +305,11 @@ export default function FamilyDetail() {
       setDeleting(false);
       setDeleteConfirm(false);
     }
+  };
+
+  const handleSaved = (updated) => {
+    setRecord(updated);
+    setEditing(false);
   };
 
   if (loading) {
@@ -379,6 +386,7 @@ export default function FamilyDetail() {
 
   return (
     <AdminLayout>
+      {editing && <FamilyEditForm record={record} onCancel={() => setEditing(false)} onSaved={handleSaved} />}
       <div className="space-y-6 lg:space-y-7">
         {/* Header / Action Bar */}
         <div className="flex items-start justify-between flex-wrap gap-4">
@@ -417,9 +425,8 @@ export default function FamilyDetail() {
             </RouterLink>
             <button
               type="button"
-              disabled
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-400 cursor-not-allowed opacity-70 transition-all"
-              title="Edit coming soon"
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-100 transition-all"
             >
               <IconEdit size={15} /> Edit
             </button>
@@ -519,38 +526,39 @@ export default function FamilyDetail() {
           <DetailCard title="Address & Location" icon={<IconMapPin size={18} />} accent="sky">
             <KV label="Current Address" value={formatAddress(addr.current)} />
             <KV label="Permanent Address" value={formatAddress(addr.permanent)} />
+            <KV label="Same as Current" value={addr.sameAsCurrent ? 'Yes' : 'No'} />
             {record.submissionId && <KV label="Submission ID" value={record.submissionId} />}
-            {record.villageCity && <KV label="Village / City" value={record.villageCity} />}
-            {record.district && <KV label="District" value={record.district} />}
-            {record.state && <KV label="State" value={record.state} />}
-            {record.pinCode && <KV label="PIN Code" value={record.pinCode} />}
           </DetailCard>
 
           <DetailCard title="Head of Family · Work / Business" icon={<IconBriefcase size={18} />} accent="amber">
             <KV label="Occupation Type" value={bw.occupationType} />
-            <KV label="Occupation" value={bw.occupation} />
             <KV label="Business Name" value={bw.businessName} />
             <KV label="Business Type" value={bw.businessType} />
             <KV label="Industry" value={bw.industry} />
             <KV label="Years In Business" value={bw.yearsInBusiness} />
+            <KV label="Job Title" value={bw.jobTitle} />
+            <KV label="Employer / Company" value={bw.employer} />
+            <KV label="Designation" value={bw.designation} />
+            <KV label="Years In Role" value={bw.yearsInRole} />
             <KV label="Workplace Address" value={bw.workAddress} />
-            <KV label="Skills" value={bw.skills} />
-            <KV label="Experience" value={bw.experience} />
-            <KV label="Other Details" value={bw.otherDetails} />
+            <KV label="Profession" value={bw.profession} />
+            <KV label="Organization / Practice" value={bw.organization} />
+            <KV label="Years Of Experience" value={bw.yearsExperience} />
+            <KV label="Institution" value={bw.institutionName} />
+            <KV label="Education Level" value={bw.educationLevel} />
+            <KV label="Course / Subject" value={bw.courseOrSubject} />
+            <KV label="Current Year / Class" value={bw.studyYear} />
+            <KV label="Study Status" value={bw.studentStatus} />
+            <KV label="Previous Occupation" value={bw.previousOccupation} />
+            <KV label="Retirement Year" value={bw.retirementYear} />
+            <KV label="Current Status / Reason" value={bw.notWorkingDetails} />
+            <KV label="Other Occupation Details" value={bw.otherOccupationDetails} />
           </DetailCard>
 
           <DetailCard title="Additional Information" icon={<IconFileText size={18} />} accent="purple">
-            <KV label="Skills" value={addi.skills} />
             <KV label="Achievements" value={addi.achievements} />
+            <KV label="Website" value={addi.professionalProfile} />
             <KV label="Remarks / Notes" value={addi.remarks} />
-            {record.dataSource && <KV label="Data Source" value={record.dataSource} />}
-            {record.collectedBy && <KV label="Collected By" value={record.collectedBy} />}
-            {(record.numberOfFamilyMembers !== undefined && record.numberOfFamilyMembers !== null) && (
-              <KV label="Declared Family Count" value={String(record.numberOfFamilyMembers)} />
-            )}
-            {(record.numberOfBusinesses !== undefined && record.numberOfBusinesses !== null) && (
-              <KV label="Declared Business Count" value={String(record.numberOfBusinesses)} />
-            )}
           </DetailCard>
         </div>
 
@@ -606,7 +614,7 @@ export default function FamilyDetail() {
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Relation</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Age</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Gender</th>
-                        <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Engaged</th>
+                        <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Marital Status</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Status</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Work / Business</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Education</th>
@@ -655,7 +663,7 @@ export default function FamilyDetail() {
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
                               <span>Relation: <span className="font-semibold text-slate-800">{familyRelation(m)}</span></span>
-                              <span>Age: <span className="font-semibold text-slate-800">{m.age || '—'}</span></span>
+                              <span>Age: <span className="font-semibold text-slate-800">{m.dateOfBirthOrAge || '—'}</span></span>
                               <span>Marital: <span className="font-semibold text-slate-800">{m.maritalStatus || '—'}</span></span>
                               {m.maritalStatus === 'Single' && <span>Engaged: <span className="font-semibold text-slate-800">{m.engagementStatus || '—'}</span></span>}
                               <span className="inline-flex items-center"><StatusBadge status={familyStatus(m)} /></span>

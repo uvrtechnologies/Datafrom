@@ -9,7 +9,6 @@ const COLUMNS = [
   { key: 'mainMemberName', label: 'Main Member' },
   { key: 'mobileNumber', label: 'Mobile' },
   { key: 'villageCity', label: 'Village/City' },
-  { key: 'district', label: 'District' },
   { key: 'numberOfFamilyMembers', label: 'Members' },
   { key: 'numberOfBusinesses', label: 'Businesses' },
   { key: 'submissionDate', label: 'Submitted' },

@@ -214,8 +214,8 @@ export default function AdminDashboard() {
           {/* Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             <ChartCard
-              title="Records by State"
-              subtitle="Top states with most family records"
+                title="Records by City"
+                subtitle="Cities with the most family records"
               height={280}
               action={
                 <button
@@ -226,7 +226,7 @@ export default function AdminDashboard() {
                 </button>
               }
             >
-              <Chart data={data.charts.byState} color="#2540bf" topN={10} />
+              <Chart data={data.charts.byCity} color="#2540bf" topN={10} />
             </ChartCard>
             <ChartCard
               title="Records by Occupation"
@@ -301,7 +301,7 @@ export default function AdminDashboard() {
                           <StatusBadge status={r.status} />
                         </td>
                         <td className="px-5 sm:px-6 py-4 text-xs text-gray-500 hidden md:table-cell whitespace-nowrap">
-                          {new Date().toLocaleDateString()}
+                          {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : '—'}
                         </td>
                         <td className="px-5 sm:px-6 py-4 text-right">
                           <button

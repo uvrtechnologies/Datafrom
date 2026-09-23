@@ -12,9 +12,55 @@ const NAME_REGEX = /^[A-Za-z\s]+$/;
 const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const URL_REGEX = /^https?:\/\/[^\s]+$/i;
-const VILLAGE_OPTIONS = ['Agar', 'Anandpur', 'Bajpur', 'Bardhaman', 'Chandrapur', 'Dharampur', 'Gandhinagar', 'Haldwani', 'Jaipur Road', 'Kharagpur', 'Laxmipur', 'Madhpur', 'Nandgaon', 'Pali', 'Rajpura', 'Sahibabad', 'Tirunelveli'];
-const CITY_OPTIONS = ['Ahmedabad', 'Bengaluru', 'Chennai', 'Delhi', 'Hyderabad', 'Jaipur', 'Kolkata', 'Lucknow', 'Mumbai', 'Nagpur', 'Patna', 'Pune', 'Surat', 'Visakhapatnam'];
+const CITY_OPTIONS = [
+  'Select City',
+  'Depalpur',
+  'Hatod',
+  'Indore',
+  'Mhow',
+  'Sawer'
+];
 
+const VILLAGE_OPTIONS = [
+  'Select Village',
+
+  // Mhow
+  'Amba Chandan',
+  'Berchha',
+  'Bhicholi',
+  'Chikhli',
+  'Choral',
+  'Datoda',
+  'Gokanya',
+  'Gosi Kheda',
+  'Gujarkheda (CT)',
+  'Harsola',
+  'Hasalpur',
+  'Joshi Guradiya',
+  'Kelod',
+  'Memdi',
+  'Mhow Cantt (CB)',
+  'Mhowgaon (NP)',
+  'Patal Pani',
+  'Pathan Pipalya',
+  'Shivnagar',
+  'Simrol',
+  'Tinchha',
+  'Jalalpura',
+
+  // Indore
+  'Asrawad Khurd',
+  'Kalod Kartal',
+  'Machla',
+  'Mirjapur',
+  'Morod',
+  'Ralamandal',
+  'Tillor Buzurg',
+  'Tillor Khurd',
+  'Tinchha',
+  'Ujjaini',
+  'Umri Kheda'
+];
 function validateName(value, fieldLabel) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return `${fieldLabel} is required.`;

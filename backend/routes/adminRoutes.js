@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   login,
+  createAdmin,
   getFamilies,
   getFamilyById,
   updateFamily,
@@ -17,6 +18,7 @@ router.post('/login', loginLimiter, login);
 // Everything below requires a valid JWT
 router.use(protect);
 
+router.post('/admins', requireRole('superadmin'), createAdmin);
 router.get('/dashboard/stats', getDashboardStats);
 router.get('/families', getFamilies);
 router.get('/families/:id', getFamilyById);

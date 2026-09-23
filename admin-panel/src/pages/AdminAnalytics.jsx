@@ -100,7 +100,7 @@ export default function AdminAnalytics() {
   const cards = data?.cards || {};
   const charts = data?.charts || {};
 
-  const byState = prepareChart(charts.byState, 12);
+  const byVillage = prepareChart(charts.byVillage, 12);
   const byOccupation = prepareChart(charts.byOccupation, 12);
   const byCity = prepareChart(charts.byCity, 16);
 
@@ -152,29 +152,29 @@ export default function AdminAnalytics() {
         {/* Charts grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
           <ChartCard
-            title="Records by State / Region"
-            subtitle="Top 12 regions sorted by count"
+            title="Records by Village"
+            subtitle="Top 12 villages sorted by count"
             height={340}
             icon={<IconMapPin size={16} />}
             accent="sky"
             action={
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                {byState.length} regions
+                {byVillage.length} villages
               </span>
             }
           >
-            {byState.length === 0 ? (
+            {byVillage.length === 0 ? (
               <div className="h-full flex items-center justify-center">
                 <EmptyState
                   icon={<IconMapPin size={28} />}
-                  title="No state data"
-                  description="State-level breakdowns will appear here once data is collected."
+                  title="No village data"
+                  description="Village-level breakdowns will appear here once data is collected."
                   className="!border-0 !shadow-none !bg-transparent"
                 />
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={byState} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                  <BarChart data={byVillage} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                   <XAxis
                     dataKey="name"
@@ -195,7 +195,7 @@ export default function AdminAnalytics() {
                   />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', radius: 6 }} />
                   <Bar dataKey="count" radius={[5, 5, 0, 0]} maxBarSize={34}>
-                    {byState.map((_, i) => (
+                    {byVillage.map((_, i) => (
                       <Cell key={i} fill={STATE_COLORS[i % STATE_COLORS.length]} />
                     ))}
                   </Bar>

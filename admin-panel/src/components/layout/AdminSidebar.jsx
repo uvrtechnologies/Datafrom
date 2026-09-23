@@ -5,6 +5,7 @@ import {
   IconLayoutDashboard,
   IconDatabase,
   IconBarChart3,
+  IconUsers,
   IconChevronLeft,
   IconChevronRight,
   IconLogOut,
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: IconLayoutDashboard },
   { to: '/families', label: 'Family Records', icon: IconDatabase },
   { to: '/analytics', label: 'Analytics', icon: IconBarChart3 },
+  { to: '/admins/new', label: 'Add Admin', icon: IconUsers, superadminOnly: true },
 ];
 
 function isActive(pathname, to) {
@@ -114,7 +116,7 @@ export default function AdminSidebar({
             </p>
           </div>
         )}
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
+        {NAV_ITEMS.filter((item) => !item.superadminOnly || admin?.role === 'superadmin').map(({ to, label, icon: Icon }) => {
           const active = isActive(location.pathname, to);
           return (
             <button

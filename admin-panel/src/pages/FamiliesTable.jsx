@@ -31,6 +31,7 @@ const OCCUPATION_TYPES = [
   'Job / Employee',
   'Self Employed',
   'Professional',
+  'Farmer',
   'Student',
   'Retired',
   'Not Working',
@@ -85,8 +86,8 @@ export default function FamiliesTable() {
 
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [filters, setFilters] = useState({
-    state: '',
     city: '',
+    village: '',
     occupationType: '',
     businessType: '',
     workStatus: '',
@@ -110,8 +111,8 @@ export default function FamiliesTable() {
           page,
           limit: pagination.limit,
           search: search.trim() || undefined,
-          state: filters.state || undefined,
           city: filters.city || undefined,
+          village: filters.village || undefined,
           occupationType: filters.occupationType || undefined,
           businessType: filters.businessType || undefined,
           workStatus: filters.workStatus || undefined,
@@ -147,8 +148,8 @@ export default function FamiliesTable() {
   const activeFilters = useMemo(() => {
     const chips = [];
     if (search) chips.push({ key: 'search', label: `Search: ${search}` });
-    if (filters.state) chips.push({ key: 'state', label: `State: ${filters.state}` });
     if (filters.city) chips.push({ key: 'city', label: `City: ${filters.city}` });
+    if (filters.village) chips.push({ key: 'village', label: `Village: ${filters.village}` });
     if (filters.occupationType) chips.push({ key: 'occ', label: `Occupation: ${filters.occupationType}` });
     if (filters.businessType) chips.push({ key: 'biz', label: `Business: ${filters.businessType}` });
     if (filters.workStatus) chips.push({ key: 'ws', label: `Work Status: ${filters.workStatus}` });
@@ -159,7 +160,7 @@ export default function FamiliesTable() {
 
   const clearAll = () => {
     setSearch('');
-    setFilters({ state: '', city: '', occupationType: '', businessType: '', workStatus: '', dateFrom: '', dateTo: '' });
+    setFilters({ city: '', village: '', occupationType: '', businessType: '', workStatus: '', dateFrom: '', dateTo: '' });
     setSort({ by: 'createdAt', dir: 'desc' });
     setSearchParams({});
   };
@@ -169,8 +170,8 @@ export default function FamiliesTable() {
       page: 1,
       limit: 100000,
       search: search.trim() || undefined,
-      state: filters.state || undefined,
       city: filters.city || undefined,
+      village: filters.village || undefined,
       occupationType: filters.occupationType || undefined,
       businessType: filters.businessType || undefined,
       workStatus: filters.workStatus || undefined,
@@ -188,9 +189,7 @@ export default function FamiliesTable() {
       surname: r.mainMemberSurname,
       mainMemberName: r.mainMemberName,
       mobileNumber: r.mobileNumber,
-      villageCity: r.city,
-      district: r.district,
-      state: r.state,
+      villageCity: [r.village, r.city].filter(Boolean).join(', '),
       numberOfFamilyMembers: r.numberOfFamilyMembers,
       numberOfBusinesses: r.occupationType === 'Business Owner' ? 1 : 0,
       submissionDate: r.submissionDate,
@@ -374,25 +373,25 @@ export default function FamiliesTable() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
-                State
-              </label>
-              <input
-                type="text"
-                value={filters.state}
-                onChange={(e) => setFilters({ ...filters, state: e.target.value })}
-                placeholder="e.g. Maharashtra"
-                className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
-                City / Village
+                City
               </label>
               <input
                 type="text"
                 value={filters.city}
                 onChange={(e) => setFilters({ ...filters, city: e.target.value })}
                 placeholder="e.g. Pune"
+                className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
+                Village
+              </label>
+              <input
+                type="text"
+                value={filters.village}
+                onChange={(e) => setFilters({ ...filters, village: e.target.value })}
+                placeholder="e.g. Simrol"
                 className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
               />
             </div>
@@ -525,9 +524,6 @@ export default function FamiliesTable() {
                   <th scope="col" className="px-5 sm:px-6 py-4 hidden lg:table-cell">
                     Village / City
                   </th>
-                  <th scope="col" className="px-5 sm:px-6 py-4 hidden xl:table-cell">
-                    State
-                  </th>
                   <th scope="col" className="px-5 sm:px-6 py-4 hidden md:table-cell">
                     Occupation
                   </th>
@@ -572,9 +568,6 @@ export default function FamiliesTable() {
                     </td>
                     <td className="px-5 sm:px-6 py-4 text-gray-600 hidden lg:table-cell truncate max-w-[140px]">
                       {r.city || '—'}
-                    </td>
-                    <td className="px-5 sm:px-6 py-4 text-gray-600 hidden xl:table-cell truncate max-w-[140px]">
-                      {r.state || '—'}
                     </td>
                     <td className="px-5 sm:px-6 py-4 hidden md:table-cell whitespace-nowrap">
                       {r.occupationType ? (

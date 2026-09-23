@@ -87,6 +87,45 @@ async function login(req, res, next) {
   }
 }
 
+// POST /api/admin/admins
+async function createAdmin(req, res, next) {
+  try {
+    const name = String(req.body.name || '').trim();
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const mobileNumber = String(req.body.mobileNumber || '').trim();
+    const password = String(req.body.password || '');
+    const role = req.body.role === 'viewer' ? 'viewer' : 'admin';
+
+    if (name.length < 2) {
+      return res.status(400).json({ success: false, message: 'Name must be at least 2 characters.' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
+    if (!/^[6-9]\d{9}$/.test(mobileNumber)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit Indian mobile number.' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    }
+
+    const existing = await Admin.findOne({ email });
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'An admin with this email already exists.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const admin = await Admin.create({ name, email, mobileNumber, passwordHash, role });
+    return res.status(201).json({
+      success: true,
+      message: 'Admin account created successfully.',
+      data: { id: admin._id, name: admin.name, email: admin.email, mobileNumber: admin.mobileNumber, role: admin.role },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/admin/families?page=&limit=&search=&state=&city=&occupationType=&businessType=&sortBy=&sortDir=
 async function getFamilies(req, res, next) {
   try {
@@ -120,14 +159,18 @@ async function getFamilies(req, res, next) {
         { 'mainMember.mobileNumber': regex },
         { 'mainMember.email': regex },
         { 'address.current.city': regex },
+        { 'address.current.village': regex },
+        { 'address.current.addressLine1': regex },
         { 'address.current.district': regex },
         { 'address.current.state': regex },
+        { 'businessWork.occupationType': regex },
         { 'businessWork.businessName': regex },
       ];
     }
 
     if (state) query['address.current.state'] = new RegExp(`^${state}$`, 'i');
     if (city) query['address.current.city'] = new RegExp(`^${city}$`, 'i');
+    if (req.query.village) query['address.current.village'] = new RegExp(`^${req.query.village}$`, 'i');
     if (district) query['address.current.district'] = new RegExp(`^${district}$`, 'i');
     if (occupationType) query['mainMember.occupationType'] = occupationType;
     if (businessType) query['businessWork.businessType'] = new RegExp(businessType, 'i');
@@ -164,10 +207,11 @@ async function getFamilies(req, res, next) {
         mainMemberSurname: mm.surname || '',
         mainMemberName: buildFullName(mm.firstName, mm.surname, mm.fullName),
         mobileNumber: mm.mobileNumber,
+        village: addrCur.village || '',
         city: addrCur.city || '',
         district: addrCur.district || '',
         state: addrCur.state || '',
-        occupationType: mm.occupationType,
+        occupationType: merged.businessWork?.occupationType || '',
         numberOfFamilyMembers: merged.familyMembersLegacyMerged?.length || merged.familyMembers.length,
         submissionDate: merged.submittedAt,
         status: merged.status,
@@ -250,8 +294,8 @@ async function getDashboardStats(req, res, next) {
       familyMembersAgg,
       studentsAgg,
       recent,
-      stateAgg,
       cityAgg,
+      villageAgg,
       occupationAgg,
     ] = await Promise.all([
       Family.countDocuments(),
@@ -259,20 +303,14 @@ async function getDashboardStats(req, res, next) {
       Family.countDocuments({ submittedAt: { $gte: startOfWeek } }),
       Family.countDocuments({ submittedAt: { $gte: lastWeekStart, $lt: startOfWeek } }),
       Family.countDocuments({ submittedAt: { $gte: startOfMonth } }),
-      Family.countDocuments({ 'mainMember.occupationType': { $in: ['Business Owner', 'Self Employed'] } }),
-      Family.countDocuments({ 'mainMember.occupationType': 'Professional' }),
+      Family.countDocuments({ 'businessWork.occupationType': { $in: ['Business Owner', 'Self Employed'] } }),
+      Family.countDocuments({ 'businessWork.occupationType': 'Professional' }),
       Family.aggregate([{ $group: { _id: null, total: { $sum: { $size: '$familyMembers' } } } }]),
       Family.aggregate([
         { $project: { studentCount: { $size: { $filter: { input: '$familyMembers', as: 'm', cond: { $eq: ['$$m.workStatus', 'Student'] } } } } } },
         { $group: { _id: null, total: { $sum: '$studentCount' } } },
       ]),
-      Family.find().sort({ createdAt: -1 }).limit(5).select('submissionId mainMember.fullName status mainMember.occupationType').lean(),
-      Family.aggregate([
-        { $group: { _id: '$address.current.state', count: { $sum: 1 } } },
-        { $match: { _id: { $nin: [null, ''] } } },
-        { $sort: { count: -1 } },
-        { $limit: 15 },
-      ]),
+      Family.find().sort({ submittedAt: -1 }).limit(5).select('submissionId mainMember businessWork status submittedAt').lean(),
       Family.aggregate([
         { $group: { _id: '$address.current.city', count: { $sum: 1 } } },
         { $match: { _id: { $nin: [null, ''] } } },
@@ -280,7 +318,13 @@ async function getDashboardStats(req, res, next) {
         { $limit: 15 },
       ]),
       Family.aggregate([
-        { $group: { _id: '$mainMember.occupationType', count: { $sum: 1 } } },
+        { $group: { _id: '$address.current.village', count: { $sum: 1 } } },
+        { $match: { _id: { $nin: [null, ''] } } },
+        { $sort: { count: -1 } },
+        { $limit: 15 },
+      ]),
+      Family.aggregate([
+        { $group: { _id: '$businessWork.occupationType', count: { $sum: 1 } } },
         { $match: { _id: { $nin: [null, ''] } } },
       ]),
     ]);
@@ -308,12 +352,13 @@ async function getDashboardStats(req, res, next) {
           firstName: r.mainMember.firstName || '',
           surname: r.mainMember.surname || '',
           name: buildFullName(r.mainMember.firstName, r.mainMember.surname, r.mainMember.fullName),
-          occupationType: r.mainMember.occupationType,
+          occupationType: r.businessWork?.occupationType || '',
+          submittedAt: r.submittedAt,
           status: r.status,
         })),
         charts: {
-          byState: stateAgg,
           byCity: cityAgg,
+          byVillage: villageAgg,
           byOccupation: occupationAgg,
         },
       },
@@ -347,6 +392,7 @@ async function exportFamilies(req, res, next) {
 
 module.exports = {
   login,
+  createAdmin,
   getFamilies,
   getFamilyById,
   updateFamily,

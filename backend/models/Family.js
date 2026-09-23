@@ -31,7 +31,7 @@ const mainMemberSchema = new mongoose.Schema(
     highestEducation: { type: String, default: '' },
     occupationType: {
       type: String,
-      enum: ['Business Owner', 'Job / Employee', 'Self Employed', 'Professional', 'Student', 'Retired', 'Not Working', 'Other', ''],
+      enum: ['Business Owner', 'Job / Employee', 'Self Employed', 'Professional','Farmer', 'Student', 'Retired', 'Not Working', 'Other', ''],
       default: '',
     },
     isCurrentlyWorkingOrBusiness: { type: String, enum: ['Yes', 'No', ''], default: '' },
@@ -110,7 +110,7 @@ const businessWorkSchema = new mongoose.Schema(
   {
     occupationType: {
       type: String,
-      enum: ['Business Owner', 'Job / Employee', 'Self Employed', 'Professional', 'Student', 'Retired', 'Not Working', 'Other', ''],
+      enum: ['Business Owner', 'Job / Employee', 'Self Employed', 'Professional','Farmer', 'Student', 'Retired', 'Not Working', 'Other', ''],
       default: '',
     },
     businessName: { type: String, default: '' },
