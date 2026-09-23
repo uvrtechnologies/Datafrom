@@ -38,7 +38,7 @@ const OCCUPATION_TYPES = [
   'Other',
 ];
 
-const WORK_STATUSES = ['Working', 'Business', 'Not Working', 'Student', 'Retired', 'Other'];
+const WORK_STATUSES = ['Working', 'Business', 'Farmer', 'Housewife', 'Not Working', 'Student', 'Retired', 'Other'];
 
 const SORTABLE_COLUMNS = {
   submissionId: { key: 'submissionId', label: 'Record ID' },

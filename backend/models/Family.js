@@ -77,7 +77,7 @@ const familyMemberSchema = new mongoose.Schema(
     relation: {
       type: String,
       enum: [
-        'Spouse', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister',
+        'Spouse', 'Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister',
         'Grandfather', 'Grandmother', 'Other',
       ],
       required: true,
@@ -91,7 +91,7 @@ const familyMemberSchema = new mongoose.Schema(
     mobileNumber: { type: String, default: '' },
     workStatus: {
       type: String,
-      enum: ['Working', 'Business', 'Not Working', 'Student', 'Retired', 'Other', ''],
+      enum: ['Working', 'Business', 'Farmer', 'Housewife', 'Not Working', 'Student', 'Retired', 'Other', ''],
       default: '',
     },
     otherStatus: { type: String, default: '' },

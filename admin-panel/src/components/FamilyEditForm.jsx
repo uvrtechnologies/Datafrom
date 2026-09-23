@@ -11,10 +11,10 @@ const VILLAGES = [
   'Machla', 'Mirjapur', 'Morod', 'Ralamandal', 'Tillor Buzurg', 'Tillor Khurd',
   'Ujjaini', 'Umri Kheda',
 ];
-const RELATIONS = ['Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother', 'Other'];
+const RELATIONS = ['Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother', 'Other'];
 const GENDERS = ['Male', 'Female', 'Other'];
 const MARITAL_STATUSES = ['Single', 'Married', 'Widowed', 'Divorced'];
-const WORK_STATUSES = ['Working', 'Business', 'Not Working', 'Student', 'Retired', 'Other'];
+const WORK_STATUSES = ['Working', 'Business', 'Farmer', 'Housewife', 'Not Working', 'Student', 'Retired', 'Other'];
 const OCCUPATIONS = ['Business Owner', 'Job / Employee', 'Self Employed', 'Professional', 'Farmer', 'Student', 'Retired', 'Not Working', 'Other'];
 const EDUCATION_LEVELS = ['Primary School', 'Secondary School', 'Higher Secondary', 'Diploma', 'Undergraduate', 'Postgraduate', 'Other'];
 

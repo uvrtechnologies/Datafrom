@@ -1,8 +1,8 @@
 import React from 'react';
 import { Field, RadioPills, inputCls } from './formPrimitives';
 
-const RELATIONS = ['Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother', 'Other'];
-const WORK_STATUS = ['Working', 'Business', 'Not Working', 'Student', 'Retired', 'Other'];
+const RELATIONS = ['Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother', 'Other'];
+const WORK_STATUS = ['Working', 'Business', 'Farmer', 'Housewife', 'Not Working', 'Student', 'Retired', 'Other'];
 const EDUCATION_LEVELS = ['Primary School', 'Secondary School', 'Higher Secondary', 'Diploma', 'Undergraduate', 'Postgraduate', 'Other'];
 const EDUCATION_STATUS = ['Currently Studying', 'Completed', 'Other'];
 const BUSINESS_TYPES = ['Retail', 'Wholesale', 'Manufacturing', 'Agriculture', 'IT / Technology', 'Education', 'Healthcare', 'Construction', 'Transport', 'Finance', 'Food', 'Restaurant', 'Service', 'Real Estate', 'Professional Services', 'Other'];
