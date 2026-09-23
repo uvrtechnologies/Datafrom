@@ -53,8 +53,6 @@ All three apps run independently with their own `package.json`, `.env`, and dev 
   - `GET  /api/health` — service status + DB connection check
 - **Admin auth**
   - `POST /api/admin/login` — returns JWT (rate-limited)
-- **Admin management**
-  - `POST /api/admin/admins` — creates an `admin` or `viewer` account (superadmin only)
 - **Admin protected** (all require JWT via `Authorization: Bearer <token>`)
   - `GET    /api/admin/dashboard/stats` — dashboard cards + charts data
   - `GET    /api/admin/families` — paginated list with search + filters
@@ -95,7 +93,6 @@ npm run dev          # → http://localhost:5174
 Then:
 - Visit **http://localhost:5173** → fill out the 7-step form → submit → get a Submission ID.
 - Visit **http://localhost:5174/login** → sign in with admin creds → dashboard shows your new submission.
-- Superadmins can use **Add Admin** in the admin sidebar to create additional admin or viewer logins.
 
 ## Production Builds
 
