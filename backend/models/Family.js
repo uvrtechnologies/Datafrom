@@ -86,7 +86,7 @@ const familyMemberSchema = new mongoose.Schema(
     dateOfBirthOrAge: { type: String, default: '' },
     gender: { type: String, enum: ['Male', 'Female', 'Other'], required: true },
     maritalStatus: { type: String, enum: ['Single', 'Married', 'Widowed', 'Divorced'], required: true },
-    engagementStatus: { type: String, enum: ['Yes', 'No', ''], default: '', required: true },
+    engagementStatus: { type: String, enum: ['Yes', 'No', ''], default: '' },
     educationLevel: { type: String, default: '' },
     mobileNumber: { type: String, default: '' },
     workStatus: {

@@ -162,6 +162,10 @@ export default function FamilyForm() {
       setError('Please select your marital status.');
       return false;
     }
+    if (mainMember.maritalStatus === 'Single' && !mainMember.engagementStatus) {
+      setError('Please select your engagement status.');
+      return false;
+    }
 
     if (mainMember.email) {
       const emailTrimmed = mainMember.email.trim();

@@ -96,6 +96,9 @@ function validateFamilyMember(member, idx) {
   if (!member.relation) return `${pos}: Relationship is required.`;
   if (!member.gender) return `${pos}: Gender is required.`;
   if (!member.maritalStatus) return `${pos}: Marital Status is required.`;
+  if (member.maritalStatus === 'Single' && !member.engagementStatus) {
+    return `${pos}: Engagement Status is required for single members.`;
+  }
 
   if (member.relation === 'Other' && !String(member.otherRelationship || '').trim()) {
     return `${pos}: Specify Relationship is required for "Other".`;
@@ -134,7 +137,7 @@ function cleanFamilyMember(member) {
   } else {
     next.fullName = String(next.fullName).trim();
   }
-  if (next.maritalStatus !== 'Single') next.engagementStatus = '';
+  next.engagementStatus = next.maritalStatus === 'Single' ? (next.engagementStatus || '') : '';
   if (next.relation !== 'Other') next.otherRelationship = '';
   if (next.workStatus !== 'Other') next.otherStatus = '';
   if (next.workStatus !== 'Working') {
