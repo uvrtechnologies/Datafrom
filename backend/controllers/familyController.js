@@ -24,42 +24,33 @@ const CITY_OPTIONS = [
 const VILLAGE_OPTIONS = [
   'Select Village',
 
+  // Indore
+  'Asrawad Khurd',
+  'Kalod Kartal',
+  'Mirjapur',
+  'Morod',
+  'Ralamandal',
+  'Umri Kheda',
+
   // Mhow
-  'Amba Chandan',
-  'Berchha',
-  'Bhicholi',
   'Chikhli',
   'Choral',
   'Datoda',
   'Gokanya',
   'Gosi Kheda',
-  'Gujarkheda (CT)',
-  'Harsola',
-  'Hasalpur',
   'Joshi Guradiya',
-  'Kelod',
   'Memdi',
-  'Mhow Cantt (CB)',
-  'Mhowgaon (NP)',
-  'Patal Pani',
-  'Pathan Pipalya',
   'Shivnagar',
   'Simrol',
-  'Tinchha',
   'Jalalpura',
 
-  // Indore
-  'Asrawad Khurd',
-  'Kalod Kartal',
-  'Machla',
-  'Mirjapur',
-  'Morod',
-  'Ralamandal',
-  'Tillor Buzurg',
-  'Tillor Khurd',
-  'Tinchha',
-  'Ujjaini',
-  'Umri Kheda'
+  // Other
+  'Tejaji Nagar',
+  'Indore',
+  'Sendal',
+  'Ganjinda',
+  'Kurawad'
+  ,'other'
 ];
 function validateName(value, fieldLabel) {
   const trimmed = String(value || '').trim();
