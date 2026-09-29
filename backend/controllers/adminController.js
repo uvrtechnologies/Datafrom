@@ -3,6 +3,10 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/Admin');
 const Family = require('../models/Family');
 const FamilyKey = require('../models/FamilyKey');
+const ExcelJS = require('exceljs');
+const { getCompleteFamilyRecord } = require('../services/familyRecordSerializer');
+
+const SUBMITTED_STATUSES = ['Submitted', 'Under Review', 'Verified'];
 
 function signToken(admin) {
   return jwt.sign({ id: admin._id, role: admin.role }, process.env.JWT_SECRET, {
@@ -56,6 +60,50 @@ function mergeLegacyChildren(familyPojo) {
     _isLegacyChild: true,
   }));
   return { ...f, familyMembersLegacyMerged: [...baseMembers, ...synthesized] };
+}
+
+function buildFamilyQuery(params, { submittedOnly = false } = {}) {
+  const {
+    search = '', state, city, district, occupationType, businessType,
+    workStatus, status, hasChildren, dateFrom, dateTo,
+  } = params;
+  const query = {};
+
+  if (search) {
+    const regex = new RegExp(search.trim(), 'i');
+    query.$or = [
+      { familyKey: regex }, { submissionId: regex },
+      { 'mainMember.fullName': regex }, { 'mainMember.firstName': regex },
+      { 'mainMember.surname': regex }, { 'mainMember.mobileNumber': regex },
+      { 'mainMember.email': regex }, { 'address.current.city': regex },
+      { 'address.current.village': regex }, { 'address.current.addressLine1': regex },
+      { 'address.current.district': regex }, { 'address.current.state': regex },
+      { 'businessWork.occupationType': regex }, { 'businessWork.businessName': regex },
+    ];
+  }
+
+  if (state) query['address.current.state'] = new RegExp(`^${state}$`, 'i');
+  if (city) query['address.current.city'] = new RegExp(`^${city}$`, 'i');
+  if (params.village) query['address.current.village'] = new RegExp(`^${params.village}$`, 'i');
+  if (district) query['address.current.district'] = new RegExp(`^${district}$`, 'i');
+  if (occupationType) query['businessWork.occupationType'] = occupationType;
+  if (businessType) query['businessWork.businessType'] = new RegExp(businessType, 'i');
+  if (workStatus) query['familyMembers.workStatus'] = workStatus;
+  if (hasChildren !== undefined) query['children.hasChildren'] = hasChildren === 'true';
+  if (status && SUBMITTED_STATUSES.includes(status)) query.status = status;
+  else if (submittedOnly) query.status = { $in: SUBMITTED_STATUSES };
+
+  if (dateFrom || dateTo) {
+    query.submittedAt = {};
+    if (dateFrom) query.submittedAt.$gte = new Date(dateFrom);
+    if (dateTo) {
+      const endOfDate = new Date(dateTo);
+      endOfDate.setUTCHours(23, 59, 59, 999);
+      query.submittedAt.$lte = endOfDate;
+    }
+  }
+
+  return query;
 }
 
 // POST /api/admin/login
@@ -132,56 +180,10 @@ async function getFamilies(req, res, next) {
     const {
       page = 1,
       limit = 20,
-      search = '',
-      state,
-      city,
-      district,
-      occupationType,
-      businessType,
-      workStatus,
-      hasChildren,
-      dateFrom,
-      dateTo,
       sortBy = 'createdAt',
       sortDir = 'desc',
     } = req.query;
-
-    const query = {};
-
-    if (search) {
-      const regex = new RegExp(search.trim(), 'i');
-      query.$or = [
-        { familyKey: regex },
-        { submissionId: regex },
-        { 'mainMember.fullName': regex },
-        { 'mainMember.firstName': regex },
-        { 'mainMember.surname': regex },
-        { 'mainMember.mobileNumber': regex },
-        { 'mainMember.email': regex },
-        { 'address.current.city': regex },
-        { 'address.current.village': regex },
-        { 'address.current.addressLine1': regex },
-        { 'address.current.district': regex },
-        { 'address.current.state': regex },
-        { 'businessWork.occupationType': regex },
-        { 'businessWork.businessName': regex },
-      ];
-    }
-
-    if (state) query['address.current.state'] = new RegExp(`^${state}$`, 'i');
-    if (city) query['address.current.city'] = new RegExp(`^${city}$`, 'i');
-    if (req.query.village) query['address.current.village'] = new RegExp(`^${req.query.village}$`, 'i');
-    if (district) query['address.current.district'] = new RegExp(`^${district}$`, 'i');
-    if (occupationType) query['mainMember.occupationType'] = occupationType;
-    if (businessType) query['businessWork.businessType'] = new RegExp(businessType, 'i');
-    if (workStatus) query['familyMembers.workStatus'] = workStatus;
-    if (hasChildren !== undefined) query['children.hasChildren'] = hasChildren === 'true';
-
-    if (dateFrom || dateTo) {
-      query.submittedAt = {};
-      if (dateFrom) query.submittedAt.$gte = new Date(dateFrom);
-      if (dateTo) query.submittedAt.$lte = new Date(dateTo);
-    }
+    const query = buildFamilyQuery(req.query);
 
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
@@ -234,7 +236,8 @@ async function getFamilyById(req, res, next) {
     const family = await Family.findById(req.params.id);
     if (!family) return res.status(404).json({ success: false, message: 'Family not found.' });
     const merged = mergeLegacyChildren(family.toObject());
-    res.json({ success: true, data: merged });
+    const { completeDetails } = getCompleteFamilyRecord(merged);
+    res.json({ success: true, data: { ...merged, completeFamilyDetails: completeDetails } });
   } catch (err) {
     next(err);
   }
@@ -368,6 +371,70 @@ async function getDashboardStats(req, res, next) {
   }
 }
 
+// GET /api/admin/export/excel
+async function exportFamiliesExcel(req, res, next) {
+  try {
+    const query = buildFamilyQuery(req.query, { submittedOnly: true });
+    const { sortBy = 'createdAt', sortDir = 'desc' } = req.query;
+    const families = await Family.find(query)
+      .sort({ [sortBy]: sortDir === 'asc' ? 1 : -1 })
+      .lean();
+    const records = families.map((family) => getCompleteFamilyRecord(mergeLegacyChildren(family)).row);
+    const headerSource = records.length
+      ? records
+      : [getCompleteFamilyRecord(mergeLegacyChildren(new Family().toObject())).row];
+    const headers = [...new Set(headerSource.flatMap((record) => Object.keys(record)))];
+    const completeDetailsIndex = headers.indexOf('Complete Family Details');
+    if (completeDetailsIndex !== -1) {
+      headers.splice(completeDetailsIndex, 1);
+      headers.push('Complete Family Details');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Completed Family Records');
+    worksheet.columns = headers.map((header) => ({
+      header,
+      key: header,
+      width: header === 'Complete Family Details' ? 52 : Math.min(Math.max(header.length + 3, 18), 40),
+    }));
+    worksheet.addRows(records.map((record) => Object.fromEntries(headers.map((header) => {
+      const value = record[header] ?? '';
+      const isDateOfBirth = header.endsWith('/ Date Of Birth');
+      return [header, isDateOfBirth && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? new Date(`${value}T00:00:00.000Z`)
+        : value];
+    }))));
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.autoFilter = `A1:${worksheet.getColumn(headers.length).letter}${Math.max(1, records.length + 1)}`;
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 30;
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D4ED8' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) {
+        row.alignment = { vertical: 'top', wrapText: true };
+        let lineCount = 1;
+        row.eachCell((cell) => {
+          if (cell.value instanceof Date) cell.numFmt = 'yyyy-mm-dd hh:mm';
+          if (typeof cell.value === 'string') lineCount = Math.max(lineCount, cell.value.split('\n').length);
+        });
+        row.height = Math.min(Math.max(lineCount * 15, 20), 300);
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="completed-family-records.xlsx"',
+    });
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/admin/export
 async function exportFamilies(req, res, next) {
   try {
@@ -399,4 +466,5 @@ module.exports = {
   deleteFamily,
   getDashboardStats,
   exportFamilies,
+  exportFamiliesExcel,
 };

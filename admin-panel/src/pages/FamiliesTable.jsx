@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import api from '../services/api';
-import { exportToExcel, exportToCSV } from '../utils/exportUtils';
+import { exportToCSV } from '../utils/exportUtils';
 import StatusBadge from '../components/common/StatusBadge';
 import { Spinner, SkeletonTable } from '../components/common/LoadingState';
 import EmptyState from '../components/common/EmptyState';
@@ -81,6 +81,7 @@ export default function FamiliesTable() {
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 20 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [exportMessage, setExportMessage] = useState('');
   const [showFilters, setShowFilters] = useState(true);
   const [exportLoading, setExportLoading] = useState({ csv: false, xlsx: false });
 
@@ -91,6 +92,7 @@ export default function FamiliesTable() {
     occupationType: '',
     businessType: '',
     workStatus: '',
+    status: '',
     dateFrom: '',
     dateTo: '',
   });
@@ -115,6 +117,7 @@ export default function FamiliesTable() {
           occupationType: filters.occupationType || undefined,
           businessType: filters.businessType || undefined,
           workStatus: filters.workStatus || undefined,
+          status: filters.status || undefined,
           dateFrom: filters.dateFrom || undefined,
           dateTo: filters.dateTo || undefined,
           sortBy: sort.by,
@@ -152,6 +155,7 @@ export default function FamiliesTable() {
     if (filters.occupationType) chips.push({ key: 'occ', label: `Occupation: ${filters.occupationType}` });
     if (filters.businessType) chips.push({ key: 'biz', label: `Business: ${filters.businessType}` });
     if (filters.workStatus) chips.push({ key: 'ws', label: `Work Status: ${filters.workStatus}` });
+    if (filters.status) chips.push({ key: 'status', label: `Status: ${filters.status}` });
     if (filters.dateFrom) chips.push({ key: 'df', label: `From: ${filters.dateFrom}` });
     if (filters.dateTo) chips.push({ key: 'dt', label: `To: ${filters.dateTo}` });
     return chips;
@@ -159,7 +163,7 @@ export default function FamiliesTable() {
 
   const clearAll = () => {
     setSearch('');
-    setFilters({ city: '', village: '', occupationType: '', businessType: '', workStatus: '', dateFrom: '', dateTo: '' });
+    setFilters({ city: '', village: '', occupationType: '', businessType: '', workStatus: '', status: '', dateFrom: '', dateTo: '' });
     setSort({ by: 'createdAt', dir: 'desc' });
     setSearchParams({});
   };
@@ -174,6 +178,7 @@ export default function FamiliesTable() {
       occupationType: filters.occupationType || undefined,
       businessType: filters.businessType || undefined,
       workStatus: filters.workStatus || undefined,
+      status: filters.status || undefined,
       dateFrom: filters.dateFrom || undefined,
       dateTo: filters.dateTo || undefined,
     };
@@ -199,9 +204,37 @@ export default function FamiliesTable() {
   const doExport = async (type) => {
     try {
       setExportLoading((s) => ({ ...s, [type]: true }));
+      setError('');
+      setExportMessage('');
+      if (type === 'xlsx') {
+        const params = {
+          search: search.trim() || undefined,
+          city: filters.city || undefined,
+          village: filters.village || undefined,
+          occupationType: filters.occupationType || undefined,
+          businessType: filters.businessType || undefined,
+          workStatus: filters.workStatus || undefined,
+          status: filters.status || undefined,
+          dateFrom: filters.dateFrom || undefined,
+          dateTo: filters.dateTo || undefined,
+          sortBy: sort.by,
+          sortDir: sort.dir,
+        };
+        Object.keys(params).forEach((key) => params[key] === undefined && delete params[key]);
+        const { data: file } = await api.get('/admin/export/excel', { params, responseType: 'blob' });
+        const objectUrl = URL.createObjectURL(file);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = 'completed-family-records.xlsx';
+        link.click();
+        URL.revokeObjectURL(objectUrl);
+        setExportMessage('Excel exported successfully.');
+        return;
+      }
       const all = await fetchAllFiltered();
-      if (type === 'xlsx') exportToExcel(all);
       if (type === 'csv') exportToCSV(all);
+    } catch (e) {
+      setError(e.response?.data?.message || (type === 'xlsx' ? 'Failed to export family records.' : 'Failed to export records.'));
     } finally {
       setExportLoading((s) => ({ ...s, [type]: false }));
     }
@@ -269,7 +302,7 @@ export default function FamiliesTable() {
             className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60 transition-all shadow-sm"
           >
             {exportLoading.xlsx ? <Spinner size={15} /> : <IconFileSpreadsheet size={16} />}
-            Export Excel
+            {exportLoading.xlsx ? 'Exporting...' : 'Export Excel'}
           </button>
         </div>
       </div>
@@ -278,6 +311,11 @@ export default function FamiliesTable() {
         <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3 text-sm">
           <IconAlertCircle size={18} className="text-red-600 mt-0.5 flex-shrink-0" />
           <div className="text-red-700">{error}</div>
+        </div>
+      )}
+      {exportMessage && (
+        <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800" role="status">
+          {exportMessage}
         </div>
       )}
 
@@ -336,7 +374,7 @@ export default function FamiliesTable() {
                 } else {
                   setFilters((f) => ({
                     ...f,
-                    [c.key === 'occ' ? 'occupationType' : c.key === 'biz' ? 'businessType' : c.key === 'ws' ? 'workStatus' : c.key === 'df' ? 'dateFrom' : c.key === 'dt' ? 'dateTo' : c.key]:
+                      [c.key === 'occ' ? 'occupationType' : c.key === 'biz' ? 'businessType' : c.key === 'ws' ? 'workStatus' : c.key === 'df' ? 'dateFrom' : c.key === 'dt' ? 'dateTo' : c.key]:
                       '',
                   }));
                 }
@@ -426,6 +464,21 @@ export default function FamiliesTable() {
                     {o}
                   </option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
+                Record Status
+              </label>
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
+              >
+                <option value="">All submitted statuses</option>
+                <option value="Submitted">Submitted</option>
+                <option value="Under Review">Under Review</option>
+                <option value="Verified">Verified</option>
               </select>
             </div>
             <div>

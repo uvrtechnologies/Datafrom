@@ -562,6 +562,12 @@ export default function FamilyDetail() {
           </DetailCard>
         </div>
 
+        <DetailCard title="Complete Family Details" icon={<IconFileText size={18} />} accent="brand">
+          <pre className="whitespace-pre-wrap break-words py-4 text-sm leading-relaxed text-slate-700">
+            {record.completeFamilyDetails || 'Complete details are unavailable for this record.'}
+          </pre>
+        </DetailCard>
+
         {/* Family members table */}
         <DetailCard
           title={`Family Members (${familyMembers.length})`}

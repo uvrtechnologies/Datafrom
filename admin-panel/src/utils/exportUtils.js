@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -22,14 +21,6 @@ function toRows(records) {
       return acc;
     }, {})
   );
-}
-
-export function exportToExcel(records, filename = 'families.xlsx') {
-  const rows = toRows(records);
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Families');
-  XLSX.writeFile(workbook, filename);
 }
 
 export function exportToCSV(records, filename = 'families.csv') {

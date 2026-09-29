@@ -9,6 +9,7 @@ const {
   deleteFamily,
   getDashboardStats,
   exportFamilies,
+  exportFamiliesExcel,
 } = require('../controllers/adminController');
 const { protect, requireRole } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/rateLimiter');
@@ -24,6 +25,7 @@ router.get('/families', getFamilies);
 router.get('/families/:id', getFamilyById);
 router.put('/families/:id', updateFamily);
 router.delete('/families/:id', requireRole('superadmin', 'admin'), deleteFamily);
+router.get('/export/excel', exportFamiliesExcel);
 router.get('/export', exportFamilies);
 
 module.exports = router;
