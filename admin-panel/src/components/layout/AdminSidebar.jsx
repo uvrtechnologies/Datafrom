@@ -64,8 +64,8 @@ export default function AdminSidebar({
     <>
       {/* Brand */}
       <div
-        className={`flex items-center justify-between px-4 py-4 border-b border-gray-100/60 ${
-          collapsed && !isMobile ? 'justify-center px-2' : ''
+        className={`flex items-center py-4 border-b border-gray-100/60 ${
+          collapsed && !isMobile ? 'justify-center px-1' : 'justify-between px-4'
         }`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
@@ -92,15 +92,13 @@ export default function AdminSidebar({
           >
             <IconX size={18} />
           </button>
-        ) : !isMobile ? (
+        ) : !isMobile && !collapsed ? (
           <button
             type="button"
             onClick={onToggleCollapsed}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`p-1.5 rounded-lg text-gray-500 hover:text-navy-900 hover:bg-gray-100 transition-colors ${
-              collapsed ? 'mx-auto' : ''
-            }`}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-navy-900 hover:bg-gray-100 transition-colors"
           >
             {collapsed ? <IconChevronRight size={18} /> : <IconChevronLeft size={18} />}
           </button>

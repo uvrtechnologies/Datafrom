@@ -420,7 +420,9 @@ export default function FamilyForm() {
             <Field label="Highest Education"><input className={inputCls} placeholder="e.g. Bachelor's Degree" value={mainMember.highestEducation} onChange={(e) => setMM('highestEducation', e.target.value.trimStart())} /></Field>
 
             <div className="mt-6 rounded-xl border border-brand-100 bg-brand-50 p-4">
-              <h3 className="text-sm font-bold text-gray-800 mb-3">Current Occupation</h3>
+              <h3 className="text-sm font-bold text-gray-800 mb-3">
+                Current Occupation <span className="text-red-500">*</span>
+              </h3>
               <span className="text-sm font-semibold text-gray-700">What is your current occupation?</span>
               <ChoiceGrid options={OCCUPATION_TYPES} value={businessWork.occupationType} onChange={(v) => setBW('occupationType', v)} />
 

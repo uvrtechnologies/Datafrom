@@ -96,11 +96,10 @@ export default function FamiliesTable() {
   });
   const [sort, setSort] = useState({ by: 'createdAt', dir: 'desc' });
 
-  // Sync search param to state on mount
+  // Keep header searches in sync when the records route stays mounted.
   useEffect(() => {
-    const s = searchParams.get('search');
-    if (s) setSearch(s);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setSearch(searchParams.get('search') || '');
+  }, [searchParams]);
 
   const fetchRows = useCallback(
     async (page = 1) => {
