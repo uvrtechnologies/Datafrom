@@ -106,7 +106,6 @@ function getCompleteFamilyRecord(record) {
   const educationMembers = membersWithDetails(members, (member) => member.educationLevel || Object.values(member.educationDetails || {}).some(Boolean));
   const workMembers = membersWithDetails(members, (member) => member.workStatus || Object.values(member.workDetails || {}).some(Boolean) || member.jobProfession || member.companyBusinessName);
   const businessMembers = membersWithDetails(members, (member) => Object.values(member.businessDetails || {}).some(Boolean) || member.companyBusinessName);
-  const familyBusinessMembers = membersWithDetails(members, (member) => member.workStatus === 'Business' || Object.values(member.businessDetails || {}).some(Boolean) || member.jobProfession || member.companyBusinessName);
   const row = { 'Family ID': record.submissionId || '' };
 
   row['Applicant Details'] = formatStructuredValue(applicant) || 'None';
@@ -132,12 +131,6 @@ function getCompleteFamilyRecord(record) {
   row['Family Members Work and Occupation'] = numberedDetails(workMembers);
   row['Family Members Business'] = numberedDetails(businessMembers);
 
-  row['Family Business Details'] = familyBusinessMembers.length
-    ? numberedDetails(familyBusinessMembers)
-    : 'None';
-  row['Submission Date'] = record.submittedAt || record.createdAt || '';
-  row.Status = record.status || '';
-
   const completeDetails = [
     `FAMILY ID: ${record.submissionId || ''}`,
     `STATUS: ${record.status || ''}`,
@@ -157,8 +150,6 @@ function getCompleteFamilyRecord(record) {
     `\nFAMILY MEMBER BUSINESS\n${row['Family Members Business']}`,
     `\nADDITIONAL INFORMATION\n${formatStructuredValue(record.additionalInfo) || 'None'}`,
   ].join('\n');
-  row['Complete Family Details'] = completeDetails;
-
   return { row, completeDetails };
 }
 
