@@ -18,6 +18,8 @@ const addressBlockSchema = new mongoose.Schema(
 const mainMemberSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
+    firstName: { type: String, default: '' },
+    surname: { type: String, default: '' },
     dateOfBirth: { type: String, default: '' },
     fatherName: { type: String, default: '' },
     motherName: { type: String, default: '' },
@@ -35,6 +37,9 @@ const mainMemberSchema = new mongoose.Schema(
       default: '',
     },
     isCurrentlyWorkingOrBusiness: { type: String, enum: ['Yes', 'No', ''], default: '' },
+    resultType: { type: String, enum: ['Percentage', 'CGPA', ''], default: '' },
+    percentage: { type: String, default: '' },
+    cgpa: { type: String, default: '' },
   },
   { _id: false }
 );
@@ -67,6 +72,10 @@ const educationDetailsSchema = new mongoose.Schema(
     courseOrDegree: { type: String, default: '' },
     otherSubjectOrCourse: { type: String, default: '' },
     educationStatus: { type: String, default: '' },
+    resultType: { type: String, enum: ['Percentage', 'CGPA', ''], default: '' },
+    percentage: { type: String, default: '' },
+    cgpa: { type: String, default: '' },
+    educationName: { type: String, default: '' },
   },
   { _id: false }
 );
@@ -74,11 +83,13 @@ const educationDetailsSchema = new mongoose.Schema(
 const familyMemberSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
+    firstName: { type: String, default: '' },
+    surname: { type: String, default: '' },
     relation: {
       type: String,
       enum: [
-        'Spouse', 'Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister',
-        'Grandfather', 'Grandmother', 'Other',
+        'Husband', 'Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister',
+        'Grandfather', 'Grandmother', 'Spouse', 'Other',
       ],
       required: true,
     },
@@ -102,6 +113,9 @@ const familyMemberSchema = new mongoose.Schema(
     companyBusinessName: { type: String, default: '' },
     designation: { type: String, default: '' },
     annualIncome: { type: String, default: '' },
+    achievements: { type: String, default: '' },
+    additionalRemarks: { type: String, default: '' },
+    startupPlan: { type: String, default: '' },
   },
   { _id: true }
 );
@@ -134,6 +148,11 @@ const businessWorkSchema = new mongoose.Schema(
     previousOccupation: { type: String, default: '' },
     retirementYear: { type: String, default: '' },
     otherOccupationDetails: { type: String, default: '' },
+    resultType: { type: String, enum: ['Percentage', 'CGPA', ''], default: '' },
+    percentage: { type: String, default: '' },
+    cgpa: { type: String, default: '' },
+    educationName: { type: String, default: '' },
+    lastClassOrYear: { type: String, default: '' },
   },
   { _id: false }
 );
@@ -154,6 +173,7 @@ const additionalInfoSchema = new mongoose.Schema(
     professionalProfile: { type: String, default: '' },
     householdContext: { type: String, default: '' },
     remarks: { type: String, default: '' },
+    startupPlan: { type: String, default: '' },
   },
   { _id: false }
 );

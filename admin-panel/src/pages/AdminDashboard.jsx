@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   BarChart,
   Bar,
@@ -31,10 +31,11 @@ import {
 } from '../components/common/Icons';
 
 function Chart({ data, color, topN = 10 }) {
-  const trimmed = [...data]
+  const safeData = Array.isArray(data) ? data : [];
+  const trimmed = [...safeData]
     .sort((a, b) => b.count - a.count)
     .slice(0, topN)
-    .map((d) => ({ name: d._id || 'Unknown', count: d.count }));
+    .map((d) => ({ name: d._id || 'Unknown', count: Number(d.count || 0) }));
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -76,6 +77,8 @@ export default function AdminDashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [villageData, setVillageData] = useState([]);
+  const [villageLoading, setVillageLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -90,6 +93,23 @@ export default function AdminDashboard() {
         if (active) setError(err.response?.data?.message || 'Failed to load dashboard stats.');
       })
       .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setVillageLoading(true);
+    api
+      .get('/admin/villages/overview')
+      .then((res) => {
+        if (active) setVillageData(res.data?.data?.villages || []);
+      })
+      .catch((err) => {
+        if (active) setError(err.response?.data?.message || 'Failed to load village overview.');
+      })
+      .finally(() => active && setVillageLoading(false));
     return () => {
       active = false;
     };
@@ -181,20 +201,28 @@ export default function AdminDashboard() {
               iconBg="bg-blue-50"
               iconColor="text-blue-600"
             />
-            <StatCard
-              label="Business Owners"
-              value={data.cards.businessOwners}
-              icon={<IconBuilding2 size={20} />}
-              iconBg="bg-amber-50"
-              iconColor="text-amber-700"
-            />
-            <StatCard
-              label="Professionals"
-              value={data.cards.professionals}
-              icon={<IconBriefcase size={20} />}
-              iconBg="bg-indigo-50"
-              iconColor="text-indigo-600"
-            />
+            <Link to="/business-owners" className="block rounded-xl transition-transform duration-150 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
+              <StatCard
+                label="Business Owners"
+                value={data.cards.businessOwners}
+                icon={<IconBuilding2 size={20} />}
+                iconBg="bg-amber-50"
+                iconColor="text-amber-700"
+                actionLabel="View business owners"
+                className="h-full"
+              />
+            </Link>
+            <Link to="/professionals" className="block rounded-xl transition-transform duration-150 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
+              <StatCard
+                label="Professionals"
+                value={data.cards.professionals}
+                icon={<IconBriefcase size={20} />}
+                iconBg="bg-indigo-50"
+                iconColor="text-indigo-600"
+                actionLabel="View professionals"
+                className="h-full"
+              />
+            </Link>
             <StatCard
               label="Family Members"
               value={data.cards.totalFamilyMembers ?? 0}
@@ -202,13 +230,17 @@ export default function AdminDashboard() {
               iconBg="bg-purple-50"
               iconColor="text-purple-600"
             />
-            <StatCard
-              label="Students"
-              value={data.cards.totalStudents ?? 0}
-              icon={<IconGraduationCap size={20} />}
-              iconBg="bg-emerald-50"
-              iconColor="text-emerald-700"
-            />
+            <Link to="/students" className="block rounded-xl transition-transform duration-150 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
+              <StatCard
+                label="Students"
+                value={data.cards.totalStudents ?? 0}
+                icon={<IconGraduationCap size={20} />}
+                iconBg="bg-emerald-50"
+                iconColor="text-emerald-700"
+                actionLabel="View students"
+                className="h-full"
+              />
+            </Link>
           </div>
 
           {/* Charts Grid */}
@@ -226,15 +258,111 @@ export default function AdminDashboard() {
                 </button>
               }
             >
-              <Chart data={data.charts.byCity} color="#2540bf" topN={10} />
+              <Chart data={data.charts?.byCity ?? []} color="#2540bf" topN={10} />
             </ChartCard>
             <ChartCard
               title="Records by Occupation"
               subtitle="Head-of-family occupation breakdown"
               height={280}
             >
-              <Chart data={data.charts.byOccupation} color="#f59e0b" topN={10} />
+              <Chart data={data.charts?.byOccupation ?? []} color="#f59e0b" topN={10} />
             </ChartCard>
+          </div>
+
+          {/* Village-wise Overview */}
+          <div className="bg-white rounded-2xl border border-gray-200/70 shadow-sm overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 sm:px-6 py-5 border-b border-gray-100">
+              <div>
+                <h3 className="font-serif font-bold text-navy-900 text-lg leading-tight">
+                  Village-wise Overview
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">Click any village to view its records</p>
+              </div>
+            </div>
+
+            {villageLoading ? (
+              <div className="p-5 sm:p-6">
+                <SkeletonTable rows={6} cols={4} />
+              </div>
+            ) : villageData.length === 0 ? (
+              <EmptyState
+                icon={<IconDatabase size={22} />}
+                title="No village data yet"
+                description="No families have been submitted with village info, so the dashboard has nothing to aggregate. Add some family submissions first."
+              />
+            ) : (
+              <div className="p-5 sm:p-6">
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-slate-500">
+                        <th className="py-2.5 pr-3 font-semibold text-xs tracking-wider uppercase">Village</th>
+                        <th className="py-2.5 pr-3 text-right font-semibold text-xs tracking-wider uppercase">Total Users</th>
+                        <th className="py-2.5 pr-3 text-right font-semibold text-xs tracking-wider uppercase">Students</th>
+                        <th className="py-2.5 pr-3 text-right font-semibold text-xs tracking-wider uppercase">Business Owners</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {villageData.map((v) => (
+                        <tr
+                          key={v.village}
+                          className="border-b last:border-0 hover:bg-slate-50 cursor-pointer transition-colors"
+                          onClick={() => navigate(`/families?village=${encodeURIComponent(v.village)}`)}
+                          role="link"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') navigate(`/families?village=${encodeURIComponent(v.village)}`);
+                          }}
+                        >
+                          <td className="py-3 pr-3 font-medium text-slate-800">{v.village}</td>
+                          <td className="py-3 pr-3 text-right text-slate-700">{v.total}</td>
+                          <td className="py-3 pr-3 text-right text-blue-600 font-medium">{v.students}</td>
+                          <td className="py-3 pr-3 text-right text-emerald-600 font-medium">{v.businessOwners}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t-2 border-slate-200 bg-slate-50/60">
+                      <tr className="font-semibold text-slate-800">
+                        <td className="py-3 pr-3">Total</td>
+                        <td className="py-3 pr-3 text-right">{villageData.reduce((acc, v) => acc + (v.total || 0), 0)}</td>
+                        <td className="py-3 pr-3 text-right">{villageData.reduce((acc, v) => acc + (v.students || 0), 0)}</td>
+                        <td className="py-3 pr-3 text-right">{villageData.reduce((acc, v) => acc + (v.businessOwners || 0), 0)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="md:hidden block">
+                  {villageData.map((v) => (
+                    <div
+                      key={v.village}
+                      onClick={() => navigate(`/families?village=${encodeURIComponent(v.village)}`)}
+                      role="link"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') navigate(`/families?village=${encodeURIComponent(v.village)}`);
+                      }}
+                      className="p-3 border rounded-md mb-2 bg-white hover:bg-slate-50 cursor-pointer"
+                    >
+                      <div className="text-slate-800 font-medium mb-2">{v.village}</div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                        <div>
+                          <div className="text-xs text-slate-500">Total</div>
+                          <div className="font-semibold text-slate-700">{v.total}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500">Students</div>
+                          <div className="font-semibold text-blue-600">{v.students}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500">Business</div>
+                          <div className="font-semibold text-emerald-600">{v.businessOwners}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Recent Submissions Table */}

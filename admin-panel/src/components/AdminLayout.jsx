@@ -73,7 +73,7 @@ export default function AdminLayout({ children, title }) {
           onOpenMobileSidebar={openMobileDrawer}
         />
 
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 lg:py-8 w-full overflow-x-hidden">
+        <main className="min-w-0 flex-1 px-4 sm:px-6 lg:px-8 py-6 lg:py-8 w-full overflow-x-hidden">
           {children}
         </main>
 

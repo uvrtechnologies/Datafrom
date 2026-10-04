@@ -11,17 +11,18 @@ const VILLAGES = [
   'Machla', 'Mirjapur', 'Morod', 'Ralamandal', 'Tillor Buzurg', 'Tillor Khurd',
   'Ujjaini', 'Umri Kheda',
 ];
-const RELATIONS = ['Wife', 'Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother', 'Other'];
+const RELATIONS = ['Wife', 'Husband','Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister', 'Grandfather', 'Grandmother', 'Other'];
 const GENDERS = ['Male', 'Female', 'Other'];
 const MARITAL_STATUSES = ['Single', 'Married', 'Widowed', 'Divorced'];
 const WORK_STATUSES = ['Working', 'Business', 'Farmer', 'Housewife', 'Not Working', 'Student', 'Retired', 'Other'];
 const OCCUPATIONS = ['Business Owner', 'Job / Employee', 'Self Employed', 'Professional', 'Farmer', 'Student', 'Retired', 'Not Working', 'Other'];
-const EDUCATION_LEVELS = ['Primary School', 'Secondary School', 'Higher Secondary', 'Diploma', 'Undergraduate', 'Postgraduate', 'Other'];
+const EDUCATION_LEVELS = ['School', 'College', 'Diploma', 'Professional Degree', 'Master Degree', 'Other Special'];
+const EDUCATION_STATUS = ['Currently Studying', 'Completed', 'Other'];
 
 const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none';
 const emptyWork = () => ({ occupation: '', organization: '', designation: '', otherDetails: '' });
 const emptyBusiness = () => ({ businessName: '', businessType: '', otherDetails: '' });
-const emptyEducation = () => ({ instituteName: '', educationLevel: '', classOrYear: '', streamOrSubject: '', courseOrDegree: '', otherSubjectOrCourse: '', educationStatus: '' });
+const emptyEducation = () => ({ instituteName: '', educationLevel: '', classOrYear: '', streamOrSubject: '', courseOrDegree: '', otherSubjectOrCourse: '', educationStatus: '', resultType: '', percentage: '', cgpa: '', educationName: '' });
 
 function cloneRecord(record) {
   const mainMember = { ...(record.mainMember || {}) };
@@ -32,13 +33,16 @@ function cloneRecord(record) {
     workDetails: { ...emptyWork(), ...(member.workDetails || {}) },
     businessDetails: { ...emptyBusiness(), ...(member.businessDetails || {}) },
     educationDetails: { ...emptyEducation(), ...(member.educationDetails || {}) },
+    achievements: member.achievements || '',
+    additionalRemarks: member.additionalRemarks || '',
+    startupPlan: member.startupPlan || '',
   }));
   return {
     mainMember,
     address: { current, permanent, sameAsCurrent: Boolean(record.address?.sameAsCurrent) },
     familyMembers,
     businessWork: { ...(record.businessWork || {}) },
-    additionalInfo: { achievements: '', professionalProfile: '', remarks: '', ...(record.additionalInfo || {}) },
+    additionalInfo: { achievements: '', professionalProfile: '', remarks: '', startupPlan: '', ...(record.additionalInfo || {}) },
   };
 }
 
@@ -64,13 +68,45 @@ export default function FamilyEditForm({ record, onCancel, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const setMain = (key, value) => setForm((current) => ({ ...current, mainMember: { ...current.mainMember, [key]: value } }));
+  const splitFullName = (name) => {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return { firstName: '', surname: '' };
+    const idx = trimmed.indexOf(' ');
+    if (idx === -1) return { firstName: trimmed, surname: '' };
+    return { firstName: trimmed.slice(0, idx), surname: trimmed.slice(idx + 1).trim() };
+  };
+
+  const setMain = (key, value) => {
+    if (key === 'fullName') {
+      const { firstName, surname } = splitFullName(value);
+      setForm((current) => ({
+        ...current,
+        mainMember: { ...current.mainMember, fullName: value, firstName, surname },
+      }));
+    } else {
+      setForm((current) => ({ ...current, mainMember: { ...current.mainMember, [key]: value } }));
+    }
+  };
   const setAddress = (part, key, value) => setForm((current) => ({ ...current, address: { ...current.address, [part]: { ...current.address[part], [key]: value } } }));
   const setBusiness = (key, value) => setForm((current) => ({ ...current, businessWork: { ...current.businessWork, [key]: value } }));
   const setAdditional = (key, value) => setForm((current) => ({ ...current, additionalInfo: { ...current.additionalInfo, [key]: value } }));
   const setMember = (index, key, value) => setForm((current) => ({
     ...current,
-    familyMembers: current.familyMembers.map((member, memberIndex) => memberIndex === index ? { ...member, [key]: value } : member),
+    familyMembers: current.familyMembers.map((member, memberIndex) => {
+      if (memberIndex !== index) return member;
+      if (key === 'fullName') {
+        const trimmed = String(value || '').trim();
+        let firstName = member.firstName || '';
+        let surname = member.surname || '';
+        if (trimmed) {
+          const sp = trimmed.indexOf(' ');
+          if (sp === -1) { firstName = trimmed; surname = ''; }
+          else { firstName = trimmed.slice(0, sp); surname = trimmed.slice(sp + 1).trim(); }
+        }
+        return { ...member, fullName: value, firstName, surname };
+      }
+      return { ...member, [key]: value };
+    }),
   }));
   const setNestedMember = (index, section, key, value) => setForm((current) => ({
     ...current,
@@ -84,14 +120,21 @@ export default function FamilyEditForm({ record, onCancel, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      const mainMember = {
-        ...form.mainMember,
-        fullName: `${form.mainMember.firstName || ''} ${form.mainMember.surname || ''}`.trim() || form.mainMember.fullName,
+      const computeSplit = (obj) => {
+        const fn = String(obj.firstName || '').trim();
+        const sn = String(obj.surname || '').trim();
+        let full = String(obj.fullName || '').trim();
+        if (!full) full = `${fn} ${sn}`.trim();
+        const [derivedFirst, ...rest] = full.split(' ');
+        return {
+          ...obj,
+          fullName: full,
+          firstName: fn || derivedFirst || '',
+          surname: sn || rest.join(' ') || '',
+        };
       };
-      const familyMembers = form.familyMembers.map((member) => ({
-        ...member,
-        fullName: `${member.firstName || ''} ${member.surname || ''}`.trim() || member.fullName,
-      }));
+      const mainMember = computeSplit(form.mainMember);
+      const familyMembers = form.familyMembers.map(computeSplit);
       const payload = { ...form, mainMember, familyMembers };
       const { data } = await api.put(`/admin/families/${record._id}`, payload);
       onSaved(data.data);
@@ -116,8 +159,7 @@ export default function FamilyEditForm({ record, onCancel, onSaved }) {
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="mb-4 font-bold text-slate-900">Personal Details</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Field label="First Name"><TextInput value={form.mainMember.firstName} onChange={(value) => setMain('firstName', value)} /></Field>
-              <Field label="Surname"><TextInput value={form.mainMember.surname} onChange={(value) => setMain('surname', value)} /></Field>
+              <Field label="Full Name"><TextInput value={form.mainMember.fullName || `${form.mainMember.firstName || ''} ${form.mainMember.surname || ''}`.trim()} onChange={(value) => setMain('fullName', value)} /></Field>
               <Field label="Date of Birth"><TextInput type="date" value={form.mainMember.dateOfBirth} onChange={(value) => setMain('dateOfBirth', value)} /></Field>
               <Field label="Father's Name"><TextInput value={form.mainMember.fatherName} onChange={(value) => setMain('fatherName', value)} /></Field>
               <Field label="Mother's Name"><TextInput value={form.mainMember.motherName} onChange={(value) => setMain('motherName', value)} /></Field>
@@ -165,9 +207,19 @@ export default function FamilyEditForm({ record, onCancel, onSaved }) {
               <Field label="Years of Experience"><TextInput type="number" min="0" value={form.businessWork.yearsExperience} onChange={(value) => setBusiness('yearsExperience', value)} /></Field>
               <Field label="Institution Name"><TextInput value={form.businessWork.institutionName} onChange={(value) => setBusiness('institutionName', value)} /></Field>
               <Field label="Education Level"><SelectInput value={form.businessWork.educationLevel} onChange={(value) => setBusiness('educationLevel', value)} options={EDUCATION_LEVELS} /></Field>
+              {form.businessWork.educationLevel === 'Other Special' && (
+                <Field label="Education Name (required for Other Special)"><TextInput value={form.businessWork.educationName} onChange={(value) => setBusiness('educationName', value)} /></Field>
+              )}
               <Field label="Course / Subject"><TextInput value={form.businessWork.courseOrSubject} onChange={(value) => setBusiness('courseOrSubject', value)} /></Field>
-              <Field label="Current Year / Class"><TextInput value={form.businessWork.studyYear} onChange={(value) => setBusiness('studyYear', value)} /></Field>
-              <Field label="Study Status"><TextInput value={form.businessWork.studentStatus} onChange={(value) => setBusiness('studentStatus', value)} /></Field>
+              <Field label="Current Year / Class"><TextInput value={form.businessWork.studyYear || form.businessWork.lastClassOrYear} onChange={(value) => { setBusiness('studyYear', value); setBusiness('lastClassOrYear', value); }} /></Field>
+              <Field label="Study Status"><SelectInput value={form.businessWork.studentStatus} onChange={(value) => setBusiness('studentStatus', value)} options={EDUCATION_STATUS} /></Field>
+              <Field label="Result Type"><SelectInput value={form.businessWork.resultType} onChange={(value) => setBusiness('resultType', value)} options={['Percentage', 'CGPA']} placeholder="Not specified" /></Field>
+              {form.businessWork.resultType === 'Percentage' && (
+                <Field label="Percentage (0-100)"><TextInput type="number" min="0" max="100" step="0.01" value={form.businessWork.percentage} onChange={(value) => setBusiness('percentage', value)} /></Field>
+              )}
+              {form.businessWork.resultType === 'CGPA' && (
+                <Field label="CGPA (0-10)"><TextInput type="number" min="0" max="10" step="0.01" value={form.businessWork.cgpa} onChange={(value) => setBusiness('cgpa', value)} /></Field>
+              )}
               <Field label="Previous Occupation"><TextInput value={form.businessWork.previousOccupation} onChange={(value) => setBusiness('previousOccupation', value)} /></Field>
               <Field label="Retirement Year"><TextInput type="number" min="1900" value={form.businessWork.retirementYear} onChange={(value) => setBusiness('retirementYear', value)} /></Field>
               <Field label="Current Status / Reason"><TextInput value={form.businessWork.notWorkingDetails} onChange={(value) => setBusiness('notWorkingDetails', value)} /></Field>
@@ -181,6 +233,7 @@ export default function FamilyEditForm({ record, onCancel, onSaved }) {
               <Field label="Notable Achievements"><TextInput value={form.additionalInfo.achievements} onChange={(value) => setAdditional('achievements', value)} /></Field>
               <Field label="Website"><TextInput type="url" value={form.additionalInfo.professionalProfile} onChange={(value) => setAdditional('professionalProfile', value)} /></Field>
               <Field label="Additional Remarks"><textarea className={`${inputClass} min-h-24`} value={form.additionalInfo.remarks ?? ''} onChange={(event) => setAdditional('remarks', event.target.value)} /></Field>
+              <Field label="Startup Plan"><textarea className={`${inputClass} min-h-24`} value={form.additionalInfo.startupPlan ?? ''} onChange={(event) => setAdditional('startupPlan', event.target.value)} /></Field>
             </div>
           </section>
 
@@ -191,8 +244,7 @@ export default function FamilyEditForm({ record, onCancel, onSaved }) {
                 <div key={member._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-3 flex items-center justify-between"><h4 className="text-sm font-bold text-slate-800">Member {index + 1}</h4><button type="button" onClick={() => setForm((current) => ({ ...current, familyMembers: current.familyMembers.filter((_, memberIndex) => memberIndex !== index) }))} className="text-xs font-bold text-rose-600 hover:text-rose-700">Remove</button></div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    <Field label="First Name"><TextInput value={member.firstName} onChange={(value) => setMember(index, 'firstName', value)} /></Field>
-                    <Field label="Surname"><TextInput value={member.surname} onChange={(value) => setMember(index, 'surname', value)} /></Field>
+                    <Field label="Full Name"><TextInput value={member.fullName || `${member.firstName || ''} ${member.surname || ''}`.trim()} onChange={(value) => setMember(index, 'fullName', value)} /></Field>
                     <Field label="Relationship"><SelectInput value={member.relation} onChange={(value) => setMember(index, 'relation', value)} options={RELATIONS} /></Field>
                     <Field label="Other Relationship"><TextInput value={member.otherRelationship} onChange={(value) => setMember(index, 'otherRelationship', value)} /></Field>
                     <Field label="Date of Birth / Age"><TextInput value={member.dateOfBirthOrAge} onChange={(value) => setMember(index, 'dateOfBirthOrAge', value)} /></Field>
@@ -205,7 +257,29 @@ export default function FamilyEditForm({ record, onCancel, onSaved }) {
                   </div>
                   {member.workStatus === 'Working' && <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4"><Field label="Occupation"><TextInput value={member.workDetails.occupation} onChange={(value) => setNestedMember(index, 'workDetails', 'occupation', value)} /></Field><Field label="Organization"><TextInput value={member.workDetails.organization} onChange={(value) => setNestedMember(index, 'workDetails', 'organization', value)} /></Field><Field label="Designation"><TextInput value={member.workDetails.designation} onChange={(value) => setNestedMember(index, 'workDetails', 'designation', value)} /></Field><Field label="Other Work Details"><TextInput value={member.workDetails.otherDetails} onChange={(value) => setNestedMember(index, 'workDetails', 'otherDetails', value)} /></Field></div>}
                   {member.workStatus === 'Business' && <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3"><Field label="Business Name"><TextInput value={member.businessDetails.businessName} onChange={(value) => setNestedMember(index, 'businessDetails', 'businessName', value)} /></Field><Field label="Business Type"><TextInput value={member.businessDetails.businessType} onChange={(value) => setNestedMember(index, 'businessDetails', 'businessType', value)} /></Field><Field label="Other Business Details"><TextInput value={member.businessDetails.otherDetails} onChange={(value) => setNestedMember(index, 'businessDetails', 'otherDetails', value)} /></Field></div>}
-                  {member.workStatus === 'Student' && <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4"><Field label="School / College"><TextInput value={member.educationDetails.instituteName} onChange={(value) => setNestedMember(index, 'educationDetails', 'instituteName', value)} /></Field><Field label="Education Level"><SelectInput value={member.educationDetails.educationLevel} onChange={(value) => setNestedMember(index, 'educationDetails', 'educationLevel', value)} options={EDUCATION_LEVELS} /></Field><Field label="Class / Year"><TextInput value={member.educationDetails.classOrYear} onChange={(value) => setNestedMember(index, 'educationDetails', 'classOrYear', value)} /></Field><Field label="Stream / Subject"><TextInput value={member.educationDetails.streamOrSubject} onChange={(value) => setNestedMember(index, 'educationDetails', 'streamOrSubject', value)} /></Field><Field label="Course / Degree"><TextInput value={member.educationDetails.courseOrDegree} onChange={(value) => setNestedMember(index, 'educationDetails', 'courseOrDegree', value)} /></Field><Field label="Education Status"><TextInput value={member.educationDetails.educationStatus} onChange={(value) => setNestedMember(index, 'educationDetails', 'educationStatus', value)} /></Field></div>}
+                  {member.workStatus === 'Student' && <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Field label="School / College"><TextInput value={member.educationDetails.instituteName} onChange={(value) => setNestedMember(index, 'educationDetails', 'instituteName', value)} /></Field>
+                    <Field label="Education Level"><SelectInput value={member.educationDetails.educationLevel} onChange={(value) => setNestedMember(index, 'educationDetails', 'educationLevel', value)} options={EDUCATION_LEVELS} /></Field>
+                    {member.educationDetails.educationLevel === 'Other Special' && (
+                      <Field label="Education Name"><TextInput value={member.educationDetails.educationName} onChange={(value) => setNestedMember(index, 'educationDetails', 'educationName', value)} /></Field>
+                    )}
+                    <Field label="Class / Year"><TextInput value={member.educationDetails.classOrYear} onChange={(value) => setNestedMember(index, 'educationDetails', 'classOrYear', value)} /></Field>
+                    <Field label="Stream / Subject"><TextInput value={member.educationDetails.streamOrSubject} onChange={(value) => setNestedMember(index, 'educationDetails', 'streamOrSubject', value)} /></Field>
+                    <Field label="Course / Degree"><TextInput value={member.educationDetails.courseOrDegree} onChange={(value) => setNestedMember(index, 'educationDetails', 'courseOrDegree', value)} /></Field>
+                    <Field label="Education Status"><SelectInput value={member.educationDetails.educationStatus} onChange={(value) => setNestedMember(index, 'educationDetails', 'educationStatus', value)} options={EDUCATION_STATUS} /></Field>
+                    <Field label="Result Type"><SelectInput value={member.educationDetails.resultType} onChange={(value) => setNestedMember(index, 'educationDetails', 'resultType', value)} options={['Percentage', 'CGPA']} placeholder="Not specified" /></Field>
+                    {member.educationDetails.resultType === 'Percentage' && (
+                      <Field label="Percentage (0-100)"><TextInput type="number" min="0" max="100" step="0.01" value={member.educationDetails.percentage} onChange={(value) => setNestedMember(index, 'educationDetails', 'percentage', value)} /></Field>
+                    )}
+                    {member.educationDetails.resultType === 'CGPA' && (
+                      <Field label="CGPA (0-10)"><TextInput type="number" min="0" max="10" step="0.01" value={member.educationDetails.cgpa} onChange={(value) => setNestedMember(index, 'educationDetails', 'cgpa', value)} /></Field>
+                    )}
+                  </div>}
+                  <div className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-200 pt-4 md:grid-cols-2">
+                    <Field label="Achievements"><textarea className={`${inputClass} min-h-20`} value={member.achievements ?? ''} onChange={(event) => setMember(index, 'achievements', event.target.value)} /></Field>
+                    <Field label="Additional Remarks"><textarea className={`${inputClass} min-h-20`} value={member.additionalRemarks ?? ''} onChange={(event) => setMember(index, 'additionalRemarks', event.target.value)} /></Field>
+                    <Field label="Startup Plan"><textarea className={`${inputClass} min-h-24`} value={member.startupPlan ?? ''} onChange={(event) => setMember(index, 'startupPlan', event.target.value)} /></Field>
+                  </div>
                 </div>
               ))}
             </div>

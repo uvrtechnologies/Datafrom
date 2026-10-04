@@ -10,6 +10,7 @@ export default function StatCard({
   iconBg = 'bg-brand-50',
   iconColor = 'text-brand-600',
   onClick,
+  actionLabel,
   className = '',
 }) {
   const trendClass =
@@ -54,6 +55,11 @@ export default function StatCard({
           {icon}
         </div>
       </div>
+      {actionLabel && (
+        <div className="mt-4 border-t border-gray-100 pt-3 text-[11px] font-bold uppercase tracking-wider text-brand-600">
+          {actionLabel} <span aria-hidden="true">→</span>
+        </div>
+      )}
     </div>
   );
 }

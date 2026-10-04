@@ -20,7 +20,6 @@ import {
   IconX,
   IconFilter,
   IconDatabase,
-  IconCalendar,
   IconAlertCircle,
   IconCheck,
   IconUsers,
@@ -86,42 +85,71 @@ export default function FamiliesTable() {
   const [exportLoading, setExportLoading] = useState({ csv: false, xlsx: false });
 
   const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [filters, setFilters] = useState({
-    city: '',
-    village: '',
-    occupationType: '',
-    businessType: '',
-    workStatus: '',
-    status: '',
-    dateFrom: '',
-    dateTo: '',
-  });
+  const [filters, setFilters] = useState(() => ({
+    city: searchParams.get('city') || '',
+    village: searchParams.get('village') || '',
+    occupationType: searchParams.get('occupationType') || '',
+    businessType: searchParams.get('businessType') || '',
+    workStatus: searchParams.get('workStatus') || '',
+    status: searchParams.get('status') || '',
+    dateFrom: searchParams.get('dateFrom') || '',
+    dateTo: searchParams.get('dateTo') || '',
+    name: searchParams.get('name') || '',
+    category: searchParams.get('category') || searchParams.get('userType') || '',
+  }));
   const [sort, setSort] = useState({ by: 'createdAt', dir: 'desc' });
+  const [villagesList, setVillagesList] = useState([]);
+  const [villagesLoading, setVillagesLoading] = useState(false);
 
-  // Keep header searches in sync when the records route stays mounted.
   useEffect(() => {
     setSearch(searchParams.get('search') || '');
+    const name = searchParams.get('name') || '';
+    const village = searchParams.get('village') || '';
+    const category = searchParams.get('category') || searchParams.get('userType') || '';
+    setFilters((f) => ({ ...f, name, village, category }));
   }, [searchParams]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setVillagesLoading(true);
+    api
+      .get('/admin/villages')
+      .then((res) => {
+        if (!cancelled) setVillagesList(res.data.data.villages);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setVillagesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const fetchRows = useCallback(
-    async (page = 1) => {
+    async (page = 1, overrides = {}) => {
       setLoading(true);
       setError('');
       try {
+        const currentSearch = overrides.search ?? search;
+        const currentFilters = overrides.filters ?? filters;
+        const currentSort = overrides.sort ?? sort;
         const params = {
           page,
           limit: pagination.limit,
-          search: search.trim() || undefined,
-          city: filters.city || undefined,
-          village: filters.village || undefined,
-          occupationType: filters.occupationType || undefined,
-          businessType: filters.businessType || undefined,
-          workStatus: filters.workStatus || undefined,
-          status: filters.status || undefined,
-          dateFrom: filters.dateFrom || undefined,
-          dateTo: filters.dateTo || undefined,
-          sortBy: sort.by,
-          sortDir: sort.dir,
+          search: currentSearch.trim() || undefined,
+          city: currentFilters.city || undefined,
+          village: currentFilters.village || undefined,
+          occupationType: currentFilters.occupationType || undefined,
+          businessType: currentFilters.businessType || undefined,
+          workStatus: currentFilters.workStatus || undefined,
+          status: currentFilters.status || undefined,
+          dateFrom: currentFilters.dateFrom || undefined,
+          dateTo: currentFilters.dateTo || undefined,
+          name: currentFilters.name.trim() || undefined,
+          category: currentFilters.category || undefined,
+          sortBy: currentSort.by,
+          sortDir: currentSort.dir,
         };
         Object.keys(params).forEach(
           (k) => (params[k] === undefined || params[k] === '') && delete params[k]
@@ -145,13 +173,15 @@ export default function FamiliesTable() {
 
   useEffect(() => {
     fetchRows(1);
-  }, [fetchRows]);
+  }, []);
 
   const activeFilters = useMemo(() => {
     const chips = [];
     if (search) chips.push({ key: 'search', label: `Search: ${search}` });
+    if (filters.name) chips.push({ key: 'name', label: `Name: ${filters.name}` });
     if (filters.city) chips.push({ key: 'city', label: `City: ${filters.city}` });
     if (filters.village) chips.push({ key: 'village', label: `Village: ${filters.village}` });
+    if (filters.category) chips.push({ key: 'category', label: `Type: ${filters.category}` });
     if (filters.occupationType) chips.push({ key: 'occ', label: `Occupation: ${filters.occupationType}` });
     if (filters.businessType) chips.push({ key: 'biz', label: `Business: ${filters.businessType}` });
     if (filters.workStatus) chips.push({ key: 'ws', label: `Work Status: ${filters.workStatus}` });
@@ -163,7 +193,7 @@ export default function FamiliesTable() {
 
   const clearAll = () => {
     setSearch('');
-    setFilters({ city: '', village: '', occupationType: '', businessType: '', workStatus: '', status: '', dateFrom: '', dateTo: '' });
+    setFilters({ city: '', village: '', occupationType: '', businessType: '', workStatus: '', status: '', dateFrom: '', dateTo: '', name: '', category: '' });
     setSort({ by: 'createdAt', dir: 'desc' });
     setSearchParams({});
   };
@@ -181,6 +211,8 @@ export default function FamiliesTable() {
       status: filters.status || undefined,
       dateFrom: filters.dateFrom || undefined,
       dateTo: filters.dateTo || undefined,
+      name: filters.name.trim() || undefined,
+      category: filters.category || undefined,
     };
     Object.keys(params).forEach(
       (k) => (params[k] === undefined || params[k] === '') && delete params[k]
@@ -217,6 +249,8 @@ export default function FamiliesTable() {
           status: filters.status || undefined,
           dateFrom: filters.dateFrom || undefined,
           dateTo: filters.dateTo || undefined,
+          name: filters.name.trim() || undefined,
+          category: filters.category || undefined,
           sortBy: sort.by,
           sortDir: sort.dir,
         };
@@ -252,13 +286,23 @@ export default function FamiliesTable() {
   };
 
   const toggleSort = (colKey) => {
-    setSort((cur) => {
-      if (cur.by === colKey) {
-        return { by: colKey, dir: cur.dir === 'desc' ? 'asc' : 'desc' };
-      }
-      return { by: colKey, dir: 'desc' };
-    });
+    const next = sort.by === colKey
+      ? { by: colKey, dir: sort.dir === 'desc' ? 'asc' : 'desc' }
+      : { by: colKey, dir: 'desc' };
+    setSort(next);
+    fetchRows(1, { sort: next });
   };
+
+  const goToPage = useCallback(
+    (page) => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('page', String(page));
+      nextParams.set('limit', String(pagination.limit));
+      setSearchParams(nextParams);
+      fetchRows(page);
+    },
+    [searchParams, pagination.limit, setSearchParams, fetchRows]
+  );
 
   const SortIcon = ({ col }) =>
     sort.by === SORTABLE_COLUMNS[col]?.key ? (
@@ -276,6 +320,7 @@ export default function FamiliesTable() {
 
   return (
     <AdminLayout title="All Family Records">
+      <div className="min-w-0 w-full">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-serif font-black text-navy-900 text-2xl sm:text-3xl leading-tight">
@@ -321,17 +366,41 @@ export default function FamiliesTable() {
 
       {/* Search Bar + Toggle */}
       <div className="mb-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <IconSearch size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchRows(1)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const nextParams = new URLSearchParams(searchParams);
+                if (search.trim()) nextParams.set('search', search.trim());
+                else nextParams.delete('search');
+                nextParams.set('page', '1');
+                setSearchParams(nextParams);
+                fetchRows(1);
+              }
+            }}
             placeholder="Search by name, mobile, record ID, city…"
             className="w-full rounded-2xl border border-gray-200 bg-white pl-12 pr-4 py-3.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all shadow-sm"
           />
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            const nextParams = new URLSearchParams(searchParams);
+            if (search.trim()) nextParams.set('search', search.trim());
+            else nextParams.delete('search');
+            nextParams.set('page', '1');
+            setSearchParams(nextParams);
+            fetchRows(1);
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gray-900 text-white px-5 py-3.5 text-sm font-semibold hover:bg-gray-800 shadow-sm transition-all"
+        >
+          <IconSearch size={16} />
+          Search
+        </button>
         <button
           type="button"
           onClick={() => setShowFilters((s) => !s)}
@@ -370,14 +439,21 @@ export default function FamiliesTable() {
               onRemove={() => {
                 if (c.key === 'search') {
                   setSearch('');
-                  setSearchParams({});
-                } else {
-                  setFilters((f) => ({
-                    ...f,
-                      [c.key === 'occ' ? 'occupationType' : c.key === 'biz' ? 'businessType' : c.key === 'ws' ? 'workStatus' : c.key === 'df' ? 'dateFrom' : c.key === 'dt' ? 'dateTo' : c.key]:
-                      '',
-                  }));
-                }
+                  const nextParams = new URLSearchParams(searchParams);
+                  nextParams.delete('search');
+                  setSearchParams(nextParams);
+                  fetchRows(1, { search: '' });
+                  } else {
+                    const filterKey = c.key === 'occ' ? 'occupationType'
+                      : c.key === 'biz' ? 'businessType'
+                        : c.key === 'ws' ? 'workStatus'
+                          : c.key === 'df' ? 'dateFrom'
+                            : c.key === 'dt' ? 'dateTo'
+                              : c.key;
+                    const nextFilters = { ...filters, [filterKey]: '' };
+                    setFilters(nextFilters);
+                    fetchRows(1, { filters: nextFilters });
+                  }
               }}
             />
           ))}
@@ -410,13 +486,13 @@ export default function FamiliesTable() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
-                City
+                Name Exact/Partial Match
               </label>
               <input
                 type="text"
-                value={filters.city}
-                onChange={(e) => setFilters({ ...filters, city: e.target.value })}
-                placeholder="e.g. Pune"
+                value={filters.name}
+                onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+                placeholder="e.g. Rahul"
                 className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
               />
             </div>
@@ -424,13 +500,23 @@ export default function FamiliesTable() {
               <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
                 Village
               </label>
-              <input
-                type="text"
+              <select
                 value={filters.village}
                 onChange={(e) => setFilters({ ...filters, village: e.target.value })}
-                placeholder="e.g. Simrol"
-                className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
-              />
+                className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
+              >
+                <option value="">All villages</option>
+                {villagesLoading && (
+                  <option value="" disabled>
+                    Loading…
+                  </option>
+                )}
+                {villagesList.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
@@ -493,39 +579,32 @@ export default function FamiliesTable() {
                 className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
               />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
-                Submitted From
-              </label>
-              <div className="relative">
-                <IconCalendar size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 pl-10 pr-3.5 py-2.5 text-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 tracking-wider uppercase mb-1.5">
-                Submitted To
-              </label>
-              <div className="relative">
-                <IconCalendar size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 pl-10 pr-3.5 py-2.5 text-sm focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none"
-                />
-              </div>
-            </div>
-            <div className="flex items-end gap-2">
+            <div className="sm:col-span-2 lg:col-span-4 flex items-end justify-end gap-2">
               <button
                 type="button"
-                onClick={() => fetchRows(1)}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 text-white px-5 py-2.5 text-sm font-bold hover:bg-brand-700 shadow-sm shadow-brand-600/20 transition-all"
+                onClick={() => {
+                  clearAll();
+                  setSearchParams({});
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-400 shadow-sm transition-all"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextParams = new URLSearchParams(searchParams);
+                  ['name', 'village', 'category', 'city', 'occupationType', 'businessType', 'workStatus', 'status', 'dateFrom', 'dateTo', 'search'].forEach((k) => nextParams.delete(k));
+                  const sync = (key, val) => { const trimmed = typeof val === 'string' ? val.trim() : val; if (trimmed) nextParams.set(key, trimmed); };
+                  if (search.trim()) nextParams.set('search', search.trim());
+                  sync('name', filters.name); sync('village', filters.village); sync('category', filters.category);
+                  sync('city', filters.city); sync('occupationType', filters.occupationType); sync('businessType', filters.businessType);
+                  sync('workStatus', filters.workStatus); sync('status', filters.status); sync('dateFrom', filters.dateFrom); sync('dateTo', filters.dateTo);
+                  nextParams.set('page', '1');
+                  setSearchParams(nextParams);
+                  fetchRows(1);
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 text-white px-5 py-2.5 text-sm font-bold hover:bg-brand-700 shadow-sm shadow-brand-600/20 transition-all"
               >
                 <IconCheck size={15} />
                 Apply Filters
@@ -619,7 +698,7 @@ export default function FamiliesTable() {
                       {r.mobileNumber || '—'}
                     </td>
                     <td className="px-5 sm:px-6 py-4 text-gray-600 hidden lg:table-cell truncate max-w-[140px]">
-                      {r.city || '—'}
+                      {[r.village, r.city].filter(Boolean).join(', ') || '—'}
                     </td>
                     <td className="px-5 sm:px-6 py-4 hidden md:table-cell whitespace-nowrap">
                       {r.occupationType ? (
@@ -681,7 +760,7 @@ export default function FamiliesTable() {
           <div className="inline-flex items-center gap-1">
             <button
               type="button"
-              onClick={() => fetchRows(pagination.page - 1)}
+              onClick={() => goToPage(pagination.page - 1)}
               disabled={pagination.page <= 1}
               className="inline-flex items-center gap-1 px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
@@ -693,7 +772,7 @@ export default function FamiliesTable() {
                 <button
                   key={p}
                   type="button"
-                  onClick={() => fetchRows(p)}
+                  onClick={() => goToPage(p)}
                   className={`w-8 h-8 text-xs font-bold rounded-lg transition-all ${
                     p === pagination.page
                       ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/20'
@@ -706,7 +785,7 @@ export default function FamiliesTable() {
             </div>
             <button
               type="button"
-              onClick={() => fetchRows(pagination.page + 1)}
+              onClick={() => goToPage(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages}
               className="inline-flex items-center gap-1 px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
@@ -715,6 +794,7 @@ export default function FamiliesTable() {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </AdminLayout>
   );

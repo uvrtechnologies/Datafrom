@@ -8,6 +8,35 @@ const { getCompleteFamilyRecord } = require('../services/familyRecordSerializer'
 
 const SUBMITTED_STATUSES = ['Submitted', 'Under Review', 'Verified'];
 
+const VILLAGE_OPTIONS = [
+  'Select Village',
+
+  'Asrawad Khurd',
+  'Kalod Kartal',
+  'Mirjapur',
+  'Morod',
+  'Ralamandal',
+  'Umri Kheda',
+
+  'Chikhli',
+  'Choral',
+  'Datoda',
+  'Gokanya',
+  'Gosi Kheda',
+  'Joshi Guradiya',
+  'Memdi',
+  'Shivnagar',
+  'Simrol',
+  'Jalalpura',
+
+  'Tejaji Nagar',
+  'Indore',
+  'Sendal',
+  'Ganjinda',
+  'Kurawad'
+  ,'other'
+];
+
 function signToken(admin) {
   return jwt.sign({ id: admin._id, role: admin.role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
@@ -64,14 +93,16 @@ function mergeLegacyChildren(familyPojo) {
 
 function buildFamilyQuery(params, { submittedOnly = false } = {}) {
   const {
-    search = '', state, city, district, occupationType, businessType,
-    workStatus, status, hasChildren, dateFrom, dateTo,
+    search = '', name = '', state, city, district, occupationType, businessType,
+    workStatus, status, hasChildren, dateFrom, dateTo, userType = '', category = '',
   } = params;
   const query = {};
 
+  const searchParts = [];
+
   if (search) {
     const regex = new RegExp(search.trim(), 'i');
-    query.$or = [
+    searchParts.push(
       { familyKey: regex }, { submissionId: regex },
       { 'mainMember.fullName': regex }, { 'mainMember.firstName': regex },
       { 'mainMember.surname': regex }, { 'mainMember.mobileNumber': regex },
@@ -79,7 +110,26 @@ function buildFamilyQuery(params, { submittedOnly = false } = {}) {
       { 'address.current.village': regex }, { 'address.current.addressLine1': regex },
       { 'address.current.district': regex }, { 'address.current.state': regex },
       { 'businessWork.occupationType': regex }, { 'businessWork.businessName': regex },
-    ];
+      { 'familyMembers.fullName': regex }, { 'familyMembers.firstName': regex },
+      { 'familyMembers.surname': regex }, { 'familyMembers.mobileNumber': regex },
+      { 'familyMembers.relation': regex },
+    );
+  }
+
+  if (name) {
+    const nameRegex = new RegExp(name.trim(), 'i');
+    searchParts.push(
+      { 'mainMember.fullName': nameRegex },
+      { 'mainMember.firstName': nameRegex },
+      { 'mainMember.surname': nameRegex },
+      { 'familyMembers.fullName': nameRegex },
+      { 'familyMembers.firstName': nameRegex },
+      { 'familyMembers.surname': nameRegex },
+    );
+  }
+
+  if (searchParts.length > 0) {
+    query.$or = searchParts;
   }
 
   if (state) query['address.current.state'] = new RegExp(`^${state}$`, 'i');
@@ -87,6 +137,16 @@ function buildFamilyQuery(params, { submittedOnly = false } = {}) {
   if (params.village) query['address.current.village'] = new RegExp(`^${params.village}$`, 'i');
   if (district) query['address.current.district'] = new RegExp(`^${district}$`, 'i');
   if (occupationType) query['businessWork.occupationType'] = occupationType;
+
+  const effectiveType = userType || category;
+  if (effectiveType === 'Student') {
+    query['businessWork.occupationType'] = 'Student';
+  } else if (effectiveType === 'Business Owner') {
+    query['businessWork.occupationType'] = { $in: ['Business Owner', 'Self Employed'] };
+  } else if (occupationType) {
+    query['businessWork.occupationType'] = occupationType;
+  }
+
   if (businessType) query['businessWork.businessType'] = new RegExp(businessType, 'i');
   if (workStatus) query['familyMembers.workStatus'] = workStatus;
   if (hasChildren !== undefined) query['children.hasChildren'] = hasChildren === 'true';
@@ -230,6 +290,177 @@ async function getFamilies(req, res, next) {
   }
 }
 
+// GET /api/admin/students?page=&limit=&search=
+async function getStudents(req, res, next) {
+  try {
+    const pageNum = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const skip = (pageNum - 1) * limitNum;
+    const search = String(req.query.search || '').trim();
+    const studentMatch = { 'familyMembers.workStatus': 'Student' };
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
+      Object.assign(studentMatch, {
+        $or: [
+          { 'familyMembers.fullName': searchRegex },
+          { 'familyMembers.firstName': searchRegex },
+          { 'familyMembers.surname': searchRegex },
+          { 'familyMembers.mobileNumber': searchRegex },
+          { 'familyMembers.educationDetails.instituteName': searchRegex },
+          { 'familyMembers.educationDetails.educationLevel': searchRegex },
+          { 'familyMembers.educationDetails.classOrYear': searchRegex },
+          { 'familyMembers.educationDetails.streamOrSubject': searchRegex },
+        ],
+      });
+    }
+
+    const [result] = await Family.aggregate([
+      { $match: { 'familyMembers.workStatus': 'Student' } },
+      { $unwind: '$familyMembers' },
+      { $match: studentMatch },
+      {
+        $project: {
+          _id: '$familyMembers._id',
+          fullName: '$familyMembers.fullName',
+          firstName: '$familyMembers.firstName',
+          surname: '$familyMembers.surname',
+          mobileNumber: '$familyMembers.mobileNumber',
+          gender: '$familyMembers.gender',
+          dateOfBirthOrAge: '$familyMembers.dateOfBirthOrAge',
+          educationDetails: '$familyMembers.educationDetails',
+          createdAt: 1,
+        },
+      },
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1, fullName: 1, _id: 1 } },
+            { $skip: skip },
+            { $limit: limitNum },
+            { $project: { _id: 0, studentId: '$_id', fullName: 1, firstName: 1, surname: 1, mobileNumber: 1, gender: 1, dateOfBirthOrAge: 1, educationDetails: 1 } },
+          ],
+          pagination: [{ $count: 'total' }],
+        },
+      },
+    ]);
+
+    const total = result?.pagination[0]?.total || 0;
+    res.json({
+      success: true,
+      data: result?.data || [],
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/admin/occupations/:type?page=&limit=&search=
+async function getOccupationMembers(req, res, next) {
+  try {
+    const occupationTypes = {
+      'business-owners': ['Business Owner', 'Self Employed'],
+      professionals: ['Professional'],
+    };
+    const requestedTypes = occupationTypes[req.params.type];
+    if (!requestedTypes) {
+      return res.status(404).json({ success: false, message: 'Occupation list not found.' });
+    }
+
+    const pageNum = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const skip = (pageNum - 1) * limitNum;
+    const query = { 'businessWork.occupationType': { $in: requestedTypes } };
+    const search = String(req.query.search || '').trim();
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
+      query.$or = [
+        { 'mainMember.fullName': searchRegex },
+        { 'mainMember.firstName': searchRegex },
+        { 'mainMember.surname': searchRegex },
+        { 'mainMember.mobileNumber': searchRegex },
+        { 'mainMember.email': searchRegex },
+        { 'businessWork.businessName': searchRegex },
+        { 'businessWork.businessType': searchRegex },
+        { 'businessWork.industry': searchRegex },
+        { 'businessWork.jobTitle': searchRegex },
+        { 'businessWork.employer': searchRegex },
+        { 'businessWork.designation': searchRegex },
+        { 'businessWork.profession': searchRegex },
+        { 'businessWork.organization': searchRegex },
+      ];
+    }
+
+    const [result] = await Family.aggregate([
+      { $match: query },
+      {
+        $project: {
+          _id: 1,
+          mainMember: 1,
+          businessWork: 1,
+          createdAt: 1,
+        },
+      },
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1, 'mainMember.fullName': 1, _id: 1 } },
+            { $skip: skip },
+            { $limit: limitNum },
+            {
+              $project: {
+                _id: 1,
+                fullName: '$mainMember.fullName',
+                firstName: '$mainMember.firstName',
+                surname: '$mainMember.surname',
+                mobileNumber: '$mainMember.mobileNumber',
+                email: '$mainMember.email',
+                gender: '$mainMember.gender',
+                occupationType: '$businessWork.occupationType',
+                businessName: '$businessWork.businessName',
+                businessType: '$businessWork.businessType',
+                industry: '$businessWork.industry',
+                designation: '$businessWork.designation',
+                jobTitle: '$businessWork.jobTitle',
+                employer: '$businessWork.employer',
+                profession: '$businessWork.profession',
+                organization: '$businessWork.organization',
+                yearsInBusiness: '$businessWork.yearsInBusiness',
+                yearsInRole: '$businessWork.yearsInRole',
+                yearsExperience: '$businessWork.yearsExperience',
+              },
+            },
+          ],
+          pagination: [{ $count: 'total' }],
+        },
+      },
+    ]);
+
+    const total = result?.pagination[0]?.total || 0;
+    res.json({
+      success: true,
+      data: result?.data || [],
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/admin/families/:id
 async function getFamilyById(req, res, next) {
   try {
@@ -275,6 +506,50 @@ async function deleteFamily(req, res, next) {
   }
 }
 
+// GET /api/admin/villages/overview
+async function getVillageOverview(req, res, next) {
+  try {
+    const villageData = await Family.aggregate([
+      {
+        $group: {
+          _id: '$address.current.village',
+          total: { $sum: 1 },
+          students: {
+            $sum: {
+              $cond: [{ $eq: ['$businessWork.occupationType', 'Student'] }, 1, 0],
+            },
+          },
+          businessOwners: {
+            $sum: {
+              $cond: [
+                { $in: ['$businessWork.occupationType', ['Business Owner', 'Self Employed']] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+      { $match: { _id: { $nin: [null, ''] } } },
+      { $sort: { total: -1 } },
+    ]);
+
+    const villages = villageData.map((v) => ({
+      village: v._id,
+      total: v.total,
+      students: v.students,
+      businessOwners: v.businessOwners,
+    }));
+
+    res.json({
+      success: true,
+      data: { villages },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/admin/dashboard/stats
 async function getDashboardStats(req, res, next) {
   try {
@@ -296,9 +571,11 @@ async function getDashboardStats(req, res, next) {
       professionals,
       familyMembersAgg,
       studentsAgg,
+      mainMemberStudents,
       recent,
       cityAgg,
       villageAgg,
+      villageDetailedAgg,
       occupationAgg,
     ] = await Promise.all([
       Family.countDocuments(),
@@ -313,6 +590,7 @@ async function getDashboardStats(req, res, next) {
         { $project: { studentCount: { $size: { $filter: { input: '$familyMembers', as: 'm', cond: { $eq: ['$$m.workStatus', 'Student'] } } } } } },
         { $group: { _id: null, total: { $sum: '$studentCount' } } },
       ]),
+      Family.countDocuments({ 'businessWork.occupationType': 'Student' }),
       Family.find().sort({ submittedAt: -1 }).limit(5).select('submissionId mainMember businessWork status submittedAt').lean(),
       Family.aggregate([
         { $group: { _id: '$address.current.city', count: { $sum: 1 } } },
@@ -457,13 +735,31 @@ async function exportFamilies(req, res, next) {
   }
 }
 
+async function getVillagesList(req, res, next) {
+  try {
+    const dynamicVillages = await Family.distinct('address.current.village');
+    const staticVillages = VILLAGE_OPTIONS.filter(v => v !== 'Select Village');
+    const combined = [...staticVillages, ...dynamicVillages]
+      .filter(v => v != null && String(v).trim() !== '')
+      .map(v => String(v).trim());
+    const sorted = [...new Set(combined)].sort((a, b) => a.localeCompare(b));
+    res.json({ success: true, data: { villages: sorted } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   login,
   createAdmin,
   getFamilies,
+  getStudents,
+  getOccupationMembers,
   getFamilyById,
   updateFamily,
   deleteFamily,
+  getVillagesList,
+  getVillageOverview,
   getDashboardStats,
   exportFamilies,
   exportFamiliesExcel,

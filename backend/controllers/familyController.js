@@ -6,7 +6,9 @@ function isEmptyObj(obj) {
   return Object.values(obj).every((v) => v == null || String(v).trim() === '');
 }
 
-const STUDENT_CLASS_REQUIRED_LEVELS = ['Primary School', 'Secondary School', 'Higher Secondary', 'Diploma'];
+const MARRIED_RELATIONSHIPS = ['Husband', 'Wife', 'Grandfather', 'Grandmother', 'Father', 'Mother'];
+const NEW_EDUCATION_LEVELS = ['School', 'College', 'Diploma', 'Professional Degree', 'Master Degree', 'Other Special'];
+const STUDENT_CLASS_REQUIRED_LEVELS = ['Primary School', 'Secondary School', 'Higher Secondary', 'Diploma', 'School', 'College', 'Professional Degree', 'Master Degree'];
 
 const NAME_REGEX = /^[A-Za-z\s]+$/;
 const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
@@ -76,18 +78,41 @@ function buildDisplayFullName(firstName, surname, legacyFullName) {
   return String(legacyFullName || '').trim();
 }
 
+function validatePercentageOrCGPA(resultType, percentage, cgpa, pos) {
+  if (!resultType) return null;
+  if (resultType === 'Percentage') {
+    if (percentage === '' || percentage === null || percentage === undefined) return null;
+    const pct = Number(percentage);
+    if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+      return `${pos}: Percentage must be between 0 and 100.`;
+    }
+  } else if (resultType === 'CGPA') {
+    if (cgpa === '' || cgpa === null || cgpa === undefined) return null;
+    const c = Number(cgpa);
+    if (Number.isNaN(c) || c < 0 || c > 10) {
+      return `${pos}: CGPA must be between 0 and 10.`;
+    }
+  }
+  return null;
+}
+
 function validateFamilyMember(member, idx) {
   const pos = `Family member ${idx + 1}`;
-  const hasFirstName = String(member.firstName || '').trim() || String(member.fullName || '').trim();
-  if (!hasFirstName) return `${pos}: First Name is required.`;
-  if (member.firstName !== undefined) {
-    const fnErr = validateName(member.firstName, `${pos}: First Name`);
+  const hasFullName = String(member.fullName || '').trim() || String(member.firstName || '').trim();
+  if (!hasFullName) return `${pos}: Full Name is required.`;
+  if (member.fullName !== undefined && member.fullName !== '') {
+    const fnErr = validateName(member.fullName, `${pos}: Full Name`);
+    if (fnErr) return fnErr;
+  } else if (member.firstName !== undefined) {
+    const fnErr = validateName(member.firstName, `${pos}: Full Name`);
     if (fnErr) return fnErr;
   }
   if (!member.relation) return `${pos}: Relationship is required.`;
   if (!member.gender) return `${pos}: Gender is required.`;
-  if (!member.maritalStatus) return `${pos}: Marital Status is required.`;
-  if (member.maritalStatus === 'Single' && !member.engagementStatus) {
+
+  const effectiveMarital = MARRIED_RELATIONSHIPS.includes(member.relation) ? 'Married' : member.maritalStatus;
+  if (!effectiveMarital) return `${pos}: Marital Status is required.`;
+  if (effectiveMarital === 'Single' && !member.engagementStatus) {
     return `${pos}: Engagement Status is required for single members.`;
   }
 
@@ -109,6 +134,11 @@ function validateFamilyMember(member, idx) {
     if (STUDENT_CLASS_REQUIRED_LEVELS.includes(edu.educationLevel) && !String(edu.classOrYear || '').trim()) {
       return `${pos}: Class / Year is required for "${edu.educationLevel}".`;
     }
+    if (edu.educationLevel === 'Other Special' && !String(edu.educationName || '').trim()) {
+      return `${pos}: Education Name is required for "Other Special".`;
+    }
+    const pctErr = validatePercentageOrCGPA(edu.resultType, edu.percentage, edu.cgpa, pos);
+    if (pctErr) return pctErr;
   }
 
   if (member.workStatus === 'Working' && (!isEmptyObj(member.businessDetails) || !isEmptyObj(member.educationDetails))) {
@@ -128,7 +158,19 @@ function cleanFamilyMember(member) {
   } else {
     next.fullName = String(next.fullName).trim();
   }
-  next.engagementStatus = next.maritalStatus === 'Single' ? (next.engagementStatus || '') : '';
+  if (!next.firstName && next.fullName) {
+    const parts = next.fullName.split(' ');
+    next.firstName = parts[0] || '';
+    next.surname = parts.slice(1).join(' ') || '';
+  }
+
+  if (MARRIED_RELATIONSHIPS.includes(next.relation)) {
+    next.maritalStatus = 'Married';
+    next.engagementStatus = '';
+  } else {
+    next.engagementStatus = next.maritalStatus === 'Single' ? (next.engagementStatus || '') : '';
+  }
+
   if (next.relation !== 'Other') next.otherRelationship = '';
   if (next.workStatus !== 'Other') next.otherStatus = '';
   if (next.workStatus !== 'Working') {
@@ -145,15 +187,25 @@ function cleanFamilyMember(member) {
     next.educationDetails = {
       instituteName: '', educationLevel: '', classOrYear: '', streamOrSubject: '',
       courseOrDegree: '', otherSubjectOrCourse: '', educationStatus: '',
+      resultType: '', percentage: '', cgpa: '', educationName: '',
     };
   } else if (!next.educationDetails) {
     next.educationDetails = {
       instituteName: '', educationLevel: '', classOrYear: '', streamOrSubject: '',
       courseOrDegree: '', otherSubjectOrCourse: '', educationStatus: '',
+      resultType: '', percentage: '', cgpa: '', educationName: '',
     };
+  } else {
+    const edu = next.educationDetails;
+    if (edu.educationLevel !== 'Other Special') edu.educationName = '';
+    if (edu.resultType !== 'Percentage') edu.percentage = '';
+    if (edu.resultType !== 'CGPA') edu.cgpa = '';
   }
   if (next.mobileNumber) next.mobileNumber = String(next.mobileNumber).trim();
   if (next.dateOfBirthOrAge) next.dateOfBirthOrAge = String(next.dateOfBirthOrAge).trim();
+  ['achievements', 'additionalRemarks', 'startupPlan'].forEach((field) => {
+    if (typeof next[field] === 'string') next[field] = next[field].trim();
+  });
   return next;
 }
 
@@ -194,16 +246,30 @@ async function submitFamily(req, res, next) {
       return res.status(400).json({ success: false, message: 'Please complete all required Personal Details fields.' });
     }
 
-    const firstNameErr = validateName(mainMember.firstName, 'First name');
-    if (firstNameErr) return res.status(400).json({ success: false, message: firstNameErr });
-
-    const surnameErr = validateName(mainMember.surname, 'Surname');
-    if (surnameErr) return res.status(400).json({ success: false, message: surnameErr });
+    const hasFullName = String(mainMember.fullName || '').trim() || String(mainMember.firstName || '').trim();
+    if (!hasFullName) {
+      return res.status(400).json({ success: false, message: 'Full Name is required.' });
+    }
+    if (mainMember.fullName !== undefined && mainMember.fullName !== '') {
+      const fullNameErr = validateName(mainMember.fullName, 'Full Name');
+      if (fullNameErr) return res.status(400).json({ success: false, message: fullNameErr });
+    } else if (mainMember.firstName !== undefined) {
+      const firstNameErr = validateName(mainMember.firstName, 'Full Name');
+      if (firstNameErr) return res.status(400).json({ success: false, message: firstNameErr });
+      if (mainMember.surname !== undefined && mainMember.surname !== '') {
+        const surnameErr = validateName(mainMember.surname, 'Surname');
+        if (surnameErr) return res.status(400).json({ success: false, message: surnameErr });
+      }
+    }
 
     if (!mainMember.gender) {
       return res.status(400).json({ success: false, message: 'Gender is required.' });
     }
-    if (!mainMember.maritalStatus) {
+
+    const rawMembers = Array.isArray(familyMembers) ? familyMembers : [];
+    const hasMarriedFamilyRelation = rawMembers.some(m => MARRIED_RELATIONSHIPS.includes(m.relation));
+    const effectiveMaritalStatus = hasMarriedFamilyRelation ? 'Married' : mainMember.maritalStatus;
+    if (!effectiveMaritalStatus) {
       return res.status(400).json({ success: false, message: 'Marital status is required.' });
     }
 
@@ -236,6 +302,22 @@ async function submitFamily(req, res, next) {
       if (!businessWork.educationLevel) {
         return res.status(400).json({ success: false, message: 'Please provide the education level for Student.' });
       }
+      if ((NEW_EDUCATION_LEVELS.includes(businessWork.educationLevel) && businessWork.educationLevel !== 'Other Special') || STUDENT_CLASS_REQUIRED_LEVELS.includes(businessWork.educationLevel)) {
+        const hasLastClass = String(businessWork.lastClassOrYear || businessWork.studyYear || '').trim();
+        if (!hasLastClass) {
+          return res.status(400).json({ success: false, message: 'Please provide the last class or completed year for Student.' });
+        }
+      }
+      if (businessWork.educationLevel === 'Other Special' && !String(businessWork.educationName || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Please provide the education name for "Other Special".' });
+      }
+      const pctErr = validatePercentageOrCGPA(
+        businessWork.resultType,
+        businessWork.percentage,
+        businessWork.cgpa,
+        'Applicant'
+      );
+      if (pctErr) return res.status(400).json({ success: false, message: pctErr });
     }
     if (businessWork.occupationType === 'Not Working' && !String(businessWork.notWorkingDetails || '').trim()) {
       return res.status(400).json({ success: false, message: 'Please share the current status or reason for not working.' });
@@ -280,7 +362,6 @@ async function submitFamily(req, res, next) {
       }
     }
 
-    const rawMembers = Array.isArray(familyMembers) ? familyMembers : [];
     for (let i = 0; i < rawMembers.length; i += 1) {
       const err = validateFamilyMember(rawMembers[i], i);
       if (err) return res.status(400).json({ success: false, message: err });
@@ -289,18 +370,30 @@ async function submitFamily(req, res, next) {
 
     const cleanedFirstName = String(mainMember.firstName || '').trim();
     const cleanedSurname = String(mainMember.surname || '').trim();
+    const cleanedFullNameRaw = String(mainMember.fullName || '').trim();
+    const finalFullName = cleanedFullNameRaw || buildDisplayFullName(cleanedFirstName, cleanedSurname, mainMember.fullName);
+    let finalFirstName = cleanedFirstName;
+    let finalSurname = cleanedSurname;
+    if (!finalFirstName && finalFullName) {
+      const parts = finalFullName.split(' ');
+      finalFirstName = parts[0] || '';
+      finalSurname = parts.slice(1).join(' ') || '';
+    }
+
+    const finalMarital = hasMarriedFamilyRelation ? 'Married' : (mainMember.maritalStatus || '');
     const cleanedMainMember = {
       ...mainMember,
-      firstName: cleanedFirstName,
-      surname: cleanedSurname,
-      fullName: buildDisplayFullName(cleanedFirstName, cleanedSurname, mainMember.fullName),
+      firstName: finalFirstName,
+      surname: finalSurname,
+      fullName: finalFullName,
+      maritalStatus: finalMarital,
       mobileNumber: String(mainMember.mobileNumber || '').trim(),
       whatsappNumber: String(mainMember.whatsappNumber || '').trim(),
       email: String(mainMember.email || '').trim(),
       fatherName: String(mainMember.fatherName || '').trim(),
       motherName: String(mainMember.motherName || '').trim(),
       highestEducation: String(mainMember.highestEducation || '').trim(),
-      engagementStatus: mainMember.maritalStatus === 'Single' ? (mainMember.engagementStatus || '') : '',
+      engagementStatus: finalMarital === 'Single' ? (mainMember.engagementStatus || '') : '',
     };
 
     const cleanedAddress = address ? {
@@ -310,6 +403,22 @@ async function submitFamily(req, res, next) {
     } : {};
 
     const cleanedBW = trimBusinessWork(businessWork);
+    if (cleanedBW.occupationType === 'Student') {
+      if (cleanedBW.educationLevel !== 'Other Special') cleanedBW.educationName = '';
+      if (cleanedBW.resultType !== 'Percentage') cleanedBW.percentage = '';
+      if (cleanedBW.resultType !== 'CGPA') cleanedBW.cgpa = '';
+      if (cleanedBW.lastClassOrYear && !cleanedBW.studyYear) {
+        cleanedBW.studyYear = cleanedBW.lastClassOrYear;
+      } else if (!cleanedBW.lastClassOrYear && cleanedBW.studyYear) {
+        cleanedBW.lastClassOrYear = cleanedBW.studyYear;
+      }
+    } else {
+      cleanedBW.resultType = '';
+      cleanedBW.percentage = '';
+      cleanedBW.cgpa = '';
+      cleanedBW.educationName = '';
+      cleanedBW.lastClassOrYear = '';
+    }
     const cleanedAI = trimAdditionalInfo(additionalInfo);
 
     const family = await Family.create({

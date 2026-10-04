@@ -6,6 +6,9 @@ import {
   IconDatabase,
   IconBarChart3,
   IconUsers,
+  IconGraduationCap,
+  IconBuilding2,
+  IconBriefcase,
   IconChevronLeft,
   IconChevronRight,
   IconLogOut,
@@ -15,12 +18,17 @@ import {
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: IconLayoutDashboard },
   { to: '/families', label: 'Family Records', icon: IconDatabase },
+  { to: '/students', label: 'Students', icon: IconGraduationCap },
+  { to: '/business-owners', label: 'Business Owners', icon: IconBuilding2 },
+  { to: '/professionals', label: 'Professionals', icon: IconBriefcase },
   { to: '/analytics', label: 'Analytics', icon: IconBarChart3 },
   { to: '/admins/new', label: 'Add Admin', icon: IconUsers, superadminOnly: true },
 ];
 
 function isActive(pathname, to) {
   if (to === '/families') return pathname === '/families' || pathname.startsWith('/families/');
+  if (to === '/students') return pathname === '/students';
+  if (to === '/business-owners' || to === '/professionals') return pathname === to;
   return pathname === to;
 }
 

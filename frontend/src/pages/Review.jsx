@@ -56,17 +56,28 @@ function memberDetails(m) {
       if (ed.classOrYear) lvl += ` · Class/Year: ${ed.classOrYear}`;
       lines.push(lvl);
     }
+    if (ed.educationLevel === 'Other Special' && ed.educationName) {
+      lines.push(`Education Name: ${ed.educationName}`);
+    }
     const stream = ed.streamOrSubject || ed.otherSubjectOrCourse;
     if (stream) lines.push(`Stream/Subject: ${stream}`);
     if (ed.courseOrDegree) lines.push(`Course/Degree: ${ed.courseOrDegree}`);
     if (ed.educationStatus) lines.push(`Education Status: ${ed.educationStatus}`);
+    if (ed.resultType) {
+      lines.push(`Result Type: ${ed.resultType}`);
+      if (ed.resultType === 'Percentage' && ed.percentage !== '' && ed.percentage != null) {
+        lines.push(`Percentage: ${ed.percentage}%`);
+      } else if (ed.resultType === 'CGPA' && ed.cgpa !== '' && ed.cgpa != null) {
+        lines.push(`CGPA: ${ed.cgpa}`);
+      }
+    }
   }
   return lines;
 }
 
 export default function Review({
   mainMember, currentAddress, permanentAddress, familyMembers, businessWork,
-  additionalInfo, onEditStep, confirmed, setConfirmed,
+  additionalInfo, onEditStep, confirmed, setConfirmed, confirmationError,
 }) {
   return (
     <div>
@@ -76,9 +87,9 @@ export default function Review({
       </div>
 
       <SectionCard icon="👤" title="Personal Details" onEdit={() => onEditStep(1)}>
-        <p className="text-sm"><span className="font-semibold">First Name:</span> {mainMember.firstName || '—'}</p>
-        <p className="text-sm"><span className="font-semibold">Surname:</span> {mainMember.surname || '—'}</p>
         <p className="text-sm"><span className="font-semibold">Full Name:</span> {buildDisplayName(mainMember.firstName, mainMember.surname, mainMember.fullName) || '—'}</p>
+        {mainMember.firstName && <p className="text-sm"><span className="font-semibold">First Name:</span> {mainMember.firstName}</p>}
+        {mainMember.surname && <p className="text-sm"><span className="font-semibold">Surname:</span> {mainMember.surname}</p>}
         <p className="text-sm"><span className="font-semibold">DOB:</span> {mainMember.dateOfBirth || '—'}</p>
         <p className="text-sm"><span className="font-semibold">Email:</span> {mainMember.email || '—'}</p>
         <p className="text-sm"><span className="font-semibold">Mobile:</span> {mainMember.mobileNumber || '—'}</p>
@@ -105,34 +116,70 @@ export default function Review({
                 ))}
               </div>
             )}
+            {(m.achievements || m.additionalRemarks || m.startupPlan) && (
+              <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-0.5">
+                {m.achievements && <p className="text-xs text-gray-600"><span className="font-semibold">Achievements:</span> {m.achievements}</p>}
+                {m.additionalRemarks && <p className="text-xs text-gray-600"><span className="font-semibold">Additional Remarks:</span> {m.additionalRemarks}</p>}
+                {m.startupPlan && <p className="text-xs text-gray-600"><span className="font-semibold">Startup Plan:</span> {m.startupPlan}</p>}
+              </div>
+            )}
           </div>
         ))}
       </SectionCard>
 
-      <SectionCard icon="💼" title="Your Business / Work" onEdit={() => onEditStep(4)}>
+      <SectionCard icon="💼" title="Your Business / Work" onEdit={() => onEditStep(1)} empty={!businessWork.occupationType}>
         <p className="text-sm"><span className="font-semibold">Current Occupation:</span> {businessWork.occupationType || '—'}</p>
         {businessWork.businessName && (
           <span className="inline-block mt-2 text-xs font-bold bg-brand-100 text-brand-700 px-2 py-1 rounded">
             {businessWork.businessName}
           </span>
         )}
+        {businessWork.occupationType === 'Student' && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            {businessWork.institutionName && <p className="text-sm"><span className="font-semibold">Institution:</span> {businessWork.institutionName}</p>}
+            {businessWork.educationLevel && <p className="text-sm"><span className="font-semibold">Education Level:</span> {businessWork.educationLevel}</p>}
+            {businessWork.educationLevel === 'Other Special' && businessWork.educationName && (
+              <p className="text-sm"><span className="font-semibold">Education Name:</span> {businessWork.educationName}</p>
+            )}
+            {['College', 'Diploma', 'Professional Degree', 'Master Degree'].includes(businessWork.educationLevel) && businessWork.courseOrSubject && (
+              <p className="text-sm"><span className="font-semibold">Course / Degree:</span> {businessWork.courseOrSubject}</p>
+            )}
+            {(businessWork.lastClassOrYear || businessWork.studyYear) && (
+              <p className="text-sm"><span className="font-semibold">Last Class / Year:</span> {businessWork.lastClassOrYear || businessWork.studyYear}</p>
+            )}
+            {businessWork.studentStatus && <p className="text-sm"><span className="font-semibold">Study Status:</span> {businessWork.studentStatus}</p>}
+            {businessWork.resultType && (
+              <>
+                <p className="text-sm"><span className="font-semibold">Result Type:</span> {businessWork.resultType}</p>
+                {businessWork.resultType === 'Percentage' && businessWork.percentage !== '' && businessWork.percentage != null && (
+                  <p className="text-sm"><span className="font-semibold">Percentage:</span> {businessWork.percentage}%</p>
+                )}
+                {businessWork.resultType === 'CGPA' && businessWork.cgpa !== '' && businessWork.cgpa != null && (
+                  <p className="text-sm"><span className="font-semibold">CGPA:</span> {businessWork.cgpa}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard
-        icon="📝" title="Additional Info" onEdit={() => onEditStep(5)}
-        empty={!additionalInfo.remarks && !additionalInfo.achievements && !additionalInfo.professionalProfile}
+        icon="📝" title="Additional Info" onEdit={() => onEditStep(1)}
+        empty={!additionalInfo.remarks && !additionalInfo.achievements && !additionalInfo.professionalProfile && !additionalInfo.startupPlan}
       >
         {additionalInfo.achievements && <p className="text-sm mt-1"><span className="font-semibold">Achievements:</span> {additionalInfo.achievements}</p>}
         {additionalInfo.professionalProfile && <p className="text-sm mt-1"><span className="font-semibold">Website:</span> {additionalInfo.professionalProfile}</p>}
         {additionalInfo.remarks && <p className="text-sm italic text-gray-700 mt-2">"{additionalInfo.remarks}"</p>}
+        {additionalInfo.startupPlan && <p className="text-sm mt-2"><span className="font-semibold">Startup Plan:</span> {additionalInfo.startupPlan}</p>}
       </SectionCard>
 
       <div className="bg-brand-50 rounded-xl p-4 mt-2">
         <label className="flex items-start gap-2 text-sm text-gray-700">
-          <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+          <input id="review-confirmed" type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} aria-invalid={!!confirmationError} />
           I confirm that the information provided above is correct and accurate to the best of my knowledge. I understand
           that this data will be securely processed according to the privacy policy.
         </label>
+        {confirmationError && <p className="mt-2 text-xs text-red-600" role="alert">{confirmationError}</p>}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const LABELS = ['Personal', 'Address', 'Family', 'Additional', 'Review'];
+const LABELS = ['Personal', 'Address', 'Family', 'Review'];
 
 export default function StepDots({ current, total = 5 }) {
   return (

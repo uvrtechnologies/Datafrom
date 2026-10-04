@@ -4,8 +4,8 @@ import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   IconArrowLeft, IconTrash2, IconEdit, IconUser, IconHome, IconBriefcase,
-  IconUsers, IconFileText, IconCalendar, IconMapPin, IconMail, IconPhone,
-  IconBuilding2, IconGraduationCap, IconChevronDown, IconChevronUp,
+  IconUsers, IconFileText, IconCalendar, IconMapPin,
+  IconBuilding2, IconGraduationCap,
   IconAlertCircle, IconLoader2, IconXCircle, IconCheck,
 } from '../components/common/Icons';
 import StatusBadge from '../components/common/StatusBadge';
@@ -14,11 +14,12 @@ import EmptyState from '../components/common/EmptyState';
 import FamilyEditForm from '../components/FamilyEditForm';
 
 function KV({ label, value }) {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
+  const displayValue = typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value;
   return (
     <div className="grid grid-cols-12 gap-3 py-2.5 border-b border-slate-100 last:border-b-0">
       <div className="col-span-12 sm:col-span-4 text-xs font-bold text-slate-500 uppercase tracking-wider pt-0.5">{label}</div>
-      <div className="col-span-12 sm:col-span-8 text-sm text-slate-800 font-medium leading-relaxed break-words">{value}</div>
+      <div className="col-span-12 sm:col-span-8 text-sm text-slate-800 font-medium leading-relaxed break-words">{displayValue}</div>
     </div>
   );
 }
@@ -48,12 +49,6 @@ function DetailCard({ title, icon, accent = 'slate', children, className = '' })
   );
 }
 
-function formatAddress(a) {
-  if (!a) return '';
-  return [a.addressLine1, a.village, a.city]
-    .filter(Boolean).join(', ') || '—';
-}
-
 function buildFullName(firstName, surname, legacyFullName) {
   const fn = String(firstName || '').trim();
   const sn = String(surname || '').trim();
@@ -78,146 +73,202 @@ function familyStatus(m) {
   return m.workStatus || 'Unspecified';
 }
 
-function NestedWorkDetails({ wd }) {
-  if (!wd || (!wd.occupation && !wd.organization && !wd.designation && !wd.otherDetails)) return null;
+function hasMemberValue(...values) {
+  return values.some((value) => value !== null && value !== undefined
+    && (typeof value !== 'string' || value.trim() !== ''));
+}
+
+function detailLabel(key) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/^./, (character) => character.toUpperCase());
+}
+
+function flattenDetailFields(data, prefix = '', fields = []) {
+  if (!data || typeof data !== 'object') return fields;
+  Object.entries(data).forEach(([key, value]) => {
+    if (key.startsWith('_') || key === '__v' || value === null || value === undefined) return;
+    const label = prefix ? `${prefix} / ${detailLabel(key)}` : detailLabel(key);
+    if (typeof value === 'string' && !value.trim()) return;
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => {
+        if (entry && typeof entry === 'object') {
+          flattenDetailFields(entry, `${label} ${index + 1}`, fields);
+        } else if (entry !== null && entry !== undefined && String(entry).trim()) {
+          fields.push([`${label} ${index + 1}`, entry]);
+        }
+      });
+    } else if (typeof value === 'object') {
+      flattenDetailFields(value, label, fields);
+    } else {
+      fields.push([label, value]);
+    }
+  });
+  return fields;
+}
+
+function MainMemberDetails({ record }) {
+  const sections = [
+    { title: 'Personal Details', icon: <IconUser size={17} />, accent: 'sky', data: record.mainMember },
+    { title: 'Address Details', icon: <IconMapPin size={17} />, accent: 'brand', data: record.address },
+    { title: 'Work, Business & Education', icon: <IconBriefcase size={17} />, accent: 'amber', data: record.businessWork },
+    { title: 'Additional Information', icon: <IconFileText size={17} />, accent: 'purple', data: record.additionalInfo },
+  ];
+
   return (
-    <div className="rounded-xl bg-sky-50 ring-1 ring-inset ring-sky-100 p-4 sm:p-5 mt-1">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-sky-700 mb-2 flex items-center gap-2">
-        <IconBriefcase size={13} /> Work Details
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-        <KV label="Occupation" value={wd.occupation} />
-        <KV label="Organization" value={wd.organization} />
-        <KV label="Designation" value={wd.designation} />
-        <KV label="Other Details" value={wd.otherDetails} />
+    <div className="px-4 pb-5 sm:px-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="font-bold text-slate-900">
+            {buildFullName(record.mainMember?.firstName, record.mainMember?.surname, record.mainMember?.fullName) || 'Main Member'} · Details
+          </h4>
+          <p className="mt-0.5 text-xs text-slate-500">Complete available details for the main member only.</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {sections.map(({ title, icon, accent, data }) => {
+          const fields = flattenDetailFields(data);
+          if (!fields.length) return null;
+          return (
+            <DetailCard key={title} title={title} icon={icon} accent={accent}>
+              {fields.map(([label, value]) => (
+                <KV key={label} label={label} value={value} />
+              ))}
+            </DetailCard>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function NestedBusinessDetails({ bd }) {
-  if (!bd || (!bd.businessName && !bd.businessType && !bd.otherDetails)) return null;
-  return (
-    <div className="rounded-xl bg-amber-50 ring-1 ring-inset ring-amber-100 p-4 sm:p-5 mt-1">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-2 flex items-center gap-2">
-        <IconBuilding2 size={13} /> Business Details
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-        <KV label="Business Name" value={bd.businessName} />
-        <KV label="Business Type" value={bd.businessType} />
-        <KV label="Other Details" value={bd.otherDetails} />
-      </div>
-    </div>
-  );
-}
-
-function NestedEducationDetails({ ed }) {
-  if (!ed || (!ed.instituteName && !ed.educationLevel && !ed.classOrYear && !ed.streamOrSubject && !ed.courseOrDegree && !ed.otherSubjectOrCourse && !ed.educationStatus)) return null;
-  return (
-    <div className="rounded-xl bg-emerald-50 ring-1 ring-inset ring-emerald-100 p-4 sm:p-5 mt-1">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-2">
-        <IconGraduationCap size={13} /> Student Education Details
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-        <KV label="School / College" value={ed.instituteName} />
-        <KV label="Education Level" value={ed.educationLevel} />
-        <KV label="Class / Year" value={ed.classOrYear} />
-        <KV label="Stream / Subject" value={ed.streamOrSubject} />
-        <KV label="Course / Degree" value={ed.courseOrDegree} />
-        <KV label="Other Subject/Course" value={ed.otherSubjectOrCourse} />
-        <KV label="Education Status" value={ed.educationStatus} />
-      </div>
-    </div>
-  );
-}
-
-function LegacyFallbackDetails({ m }) {
-  if (!m || (!m.jobProfession && !m.companyBusinessName && !m.designation && !m.annualIncome)) return null;
-  return (
-    <div className="rounded-xl bg-slate-50 ring-1 ring-inset ring-slate-200 p-4 sm:p-5 mt-1">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-2 flex items-center gap-2">
-        <IconFileText size={13} /> Original Record Details (Legacy)
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-        <KV label="Occupation" value={m.jobProfession} />
-        <KV label="Workplace" value={m.companyBusinessName} />
-        <KV label="Designation" value={m.designation} />
-        <KV label="Annual Income" value={m.annualIncome} />
-      </div>
-    </div>
-  );
-}
-
-function MemberExpandRow({ m }) {
+function MemberDetails({ m, onClose }) {
   const wd = m.workDetails || {};
   const bd = m.businessDetails || {};
   const ed = m.educationDetails || {};
-  const hasNested = wd.occupation || bd.businessName || ed.instituteName || ed.educationLevel || ed.classOrYear || ed.streamOrSubject || ed.courseOrDegree || ed.otherSubjectOrCourse || ed.educationStatus;
-  const isLegacyFallback = !hasNested && m.jobProfession;
-
-  if (!hasNested && !isLegacyFallback) {
-    if (m.workStatus === 'Retired' || m.workStatus === 'Not Working') {
-      return (
-        <div className="px-4 sm:px-8 pb-6">
-          <p className="text-sm italic text-slate-500 bg-slate-50 rounded-xl py-3 px-4 ring-1 ring-inset ring-slate-100">
-            No additional details recorded ({m.workStatus}).
-          </p>
-        </div>
-      );
-    }
-    return (
-      <div className="px-4 sm:px-8 pb-6">
-        <p className="text-sm italic text-slate-500 bg-slate-50 rounded-xl py-3 px-4 ring-1 ring-inset ring-slate-100">
-          No additional details recorded for this member.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="px-4 sm:px-8 pb-6 space-y-3">
-      {m.workStatus === 'Working' && <NestedWorkDetails wd={wd} />}
-      {m.workStatus === 'Business' && <NestedBusinessDetails bd={bd} />}
-      {m.workStatus === 'Student' && <NestedEducationDetails ed={ed} />}
-      {isLegacyFallback && <LegacyFallbackDetails m={m} />}
-      {m.workStatus !== 'Working' && m.workStatus !== 'Business' && m.workStatus !== 'Student' && !isLegacyFallback && hasNested && (
-        <>
-          {wd.occupation && <NestedWorkDetails wd={wd} />}
-          {bd.businessName && <NestedBusinessDetails bd={bd} />}
-          {ed.instituteName && <NestedEducationDetails ed={ed} />}
-        </>
-      )}
+    <div className="px-4 pb-5 sm:px-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="font-bold text-slate-900">{memberDisplayName(m) || 'Family Member'} · Details</h4>
+          <p className="mt-0.5 text-xs text-slate-500">Only details for this family member are shown.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50"
+        >
+          <IconArrowLeft size={15} /> Back to Family Members
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {hasMemberValue(m.firstName, m.surname, m.fullName, m.dateOfBirthOrAge, m.gender, m.mobileNumber) && (
+          <DetailCard title="Personal Details" icon={<IconUser size={17} />} accent="sky">
+            <KV label="Full Name" value={memberDisplayName(m)} />
+            <KV label="First Name" value={m.firstName} />
+            <KV label="Surname" value={m.surname} />
+            <KV label="Date of Birth / Age" value={m.dateOfBirthOrAge} />
+            <KV label="Gender" value={m.gender} />
+            <KV label="Mobile Number" value={m.mobileNumber} />
+          </DetailCard>
+        )}
+
+        {hasMemberValue(m.relation, m.otherRelationship, m.maritalStatus, m.engagementStatus) && (
+          <DetailCard title="Relation & Marital Details" icon={<IconUsers size={17} />} accent="purple">
+            <KV label="Relation" value={m.relation} />
+            <KV label="Other Relationship" value={m.otherRelationship} />
+            <KV label="Marital Status" value={m.maritalStatus} />
+            <KV label="Engagement Status" value={m.engagementStatus} />
+          </DetailCard>
+        )}
+
+        {hasMemberValue(m.workStatus, m.otherStatus, wd.occupation, wd.organization, wd.designation, wd.otherDetails) && (
+          <DetailCard title="Work Details" icon={<IconBriefcase size={17} />} accent="sky">
+            <KV label="Work Status" value={m.workStatus} />
+            <KV label="Other Status" value={m.otherStatus} />
+            <KV label="Occupation" value={wd.occupation} />
+            <KV label="Organization" value={wd.organization} />
+            <KV label="Designation" value={wd.designation} />
+            <KV label="Other Work Details" value={wd.otherDetails} />
+          </DetailCard>
+        )}
+
+        {hasMemberValue(bd.businessName, bd.businessType, bd.otherDetails) && (
+          <DetailCard title="Business Details" icon={<IconBuilding2 size={17} />} accent="amber">
+            <KV label="Business Name" value={bd.businessName} />
+            <KV label="Business Type" value={bd.businessType} />
+            <KV label="Other Business Details" value={bd.otherDetails} />
+          </DetailCard>
+        )}
+
+        {hasMemberValue(m.educationLevel, ed.instituteName, ed.educationLevel, ed.classOrYear, ed.streamOrSubject, ed.courseOrDegree, ed.otherSubjectOrCourse, ed.educationStatus, ed.resultType, ed.percentage, ed.cgpa, ed.educationName) && (
+          <DetailCard title="Education Details" icon={<IconGraduationCap size={17} />} accent="emerald">
+            <KV label="Education Level" value={m.educationLevel} />
+            <KV label="School / College" value={ed.instituteName} />
+            <KV label="Education Level (Details)" value={ed.educationLevel} />
+            <KV label="Class / Year" value={ed.classOrYear} />
+            <KV label="Stream / Subject" value={ed.streamOrSubject} />
+            <KV label="Course / Degree" value={ed.courseOrDegree} />
+            <KV label="Other Subject / Course" value={ed.otherSubjectOrCourse} />
+            <KV label="Education Status" value={ed.educationStatus} />
+            <KV label="Result Type" value={ed.resultType} />
+            <KV label="Percentage" value={ed.percentage} />
+            <KV label="CGPA" value={ed.cgpa} />
+            <KV label="Education Name" value={ed.educationName} />
+          </DetailCard>
+        )}
+
+        {hasMemberValue(m.jobProfession, m.companyBusinessName, m.designation, m.annualIncome) && (
+          <DetailCard title="Original Record Details (Legacy)" icon={<IconFileText size={17} />} accent="slate">
+            <KV label="Original Occupation" value={m.jobProfession} />
+            <KV label="Original Workplace" value={m.companyBusinessName} />
+            <KV label="Original Designation" value={m.designation} />
+            <KV label="Annual Income" value={m.annualIncome} />
+          </DetailCard>
+        )}
+
+        {hasMemberValue(m.achievements, m.additionalRemarks, m.startupPlan) && (
+          <DetailCard title="Achievements & Additional Information" icon={<IconFileText size={17} />} accent="purple">
+            <KV label="Achievements" value={m.achievements} />
+            <KV label="Additional Remarks" value={m.additionalRemarks} />
+            <KV label="Startup Plan" value={m.startupPlan} />
+          </DetailCard>
+        )}
+
+        {!hasMemberValue(
+          m.firstName, m.surname, m.fullName, m.dateOfBirthOrAge, m.gender, m.mobileNumber,
+          m.relation, m.otherRelationship, m.maritalStatus, m.engagementStatus, m.workStatus,
+          m.otherStatus, wd.occupation, wd.organization, wd.designation, wd.otherDetails,
+          bd.businessName, bd.businessType, bd.otherDetails, m.educationLevel, ed.instituteName,
+          ed.educationLevel, ed.classOrYear, ed.streamOrSubject, ed.courseOrDegree,
+          ed.otherSubjectOrCourse, ed.educationStatus, ed.resultType, ed.percentage, ed.cgpa,
+          ed.educationName, m.jobProfession, m.companyBusinessName, m.designation, m.annualIncome,
+          m.achievements, m.additionalRemarks, m.startupPlan
+        ) && (
+          <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm italic text-slate-500 ring-1 ring-inset ring-slate-100">
+            No additional details recorded for this member.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
-function MemberRow({ m, idx, open, onToggle }) {
-  const hasContent = (
-    (m.workDetails && (m.workDetails.occupation || m.workDetails.organization || m.workDetails.designation || m.workDetails.otherDetails)) ||
-    (m.businessDetails && (m.businessDetails.businessName || m.businessDetails.businessType || m.businessDetails.otherDetails)) ||
-    (m.educationDetails && (m.educationDetails.instituteName || m.educationDetails.educationLevel || m.educationDetails.classOrYear || m.educationDetails.streamOrSubject || m.educationDetails.courseOrDegree || m.educationDetails.otherSubjectOrCourse || m.educationDetails.educationStatus)) ||
-    (m.jobProfession || m.companyBusinessName || m.designation || m.annualIncome) ||
-    m.workStatus === 'Retired' || m.workStatus === 'Not Working'
-  );
+function MemberRow({ m, idx, onView }) {
   return (
-    <>
-      <tr
-        className={`border-t border-slate-100 transition-colors ${open ? 'bg-slate-50/70' : 'hover:bg-slate-50/50'}`}
-      >
-        {hasContent ? (
-          <td className="px-3 sm:px-4 py-3.5 w-10">
-            <button
-              type="button"
-              onClick={onToggle}
-              className="h-8 w-8 inline-flex items-center justify-center rounded-lg hover:bg-white hover:shadow-sm hover:ring-1 hover:ring-slate-200 text-slate-500 hover:text-slate-800 transition-all"
-              aria-label={open ? 'Collapse details' : 'Expand details'}
-            >
-              {open ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
-            </button>
-          </td>
-        ) : (
-          <td className="px-3 sm:px-4 py-3.5 w-10 text-slate-300 text-center" />
-        )}
+    <tr className="border-t border-slate-100 transition-colors hover:bg-slate-50/50">
+        <td className="px-3 sm:px-4 py-3.5">
+          <button
+            type="button"
+            onClick={onView}
+            className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-100 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+          >
+            View
+          </button>
+        </td>
         <td className="px-3 sm:px-4 py-3.5 align-top">
           <div className="text-xs font-mono text-slate-400">#{String(idx + 1).padStart(2, '0')}</div>
         </td>
@@ -242,22 +293,14 @@ function MemberRow({ m, idx, open, onToggle }) {
           {m.workDetails?.occupation || m.businessDetails?.businessName || m.jobProfession || '—'}
         </td>
         <td className="px-3 sm:px-4 py-3.5 align-top text-sm text-slate-700">
-          {m.educationDetails?.educationLevel || m.educationDetails?.classOrYear || m.educationDetails?.instituteName ? (
+          {m.educationDetails?.educationLevel || m.educationDetails?.classOrYear || m.educationDetails?.instituteName || m.educationDetails?.resultType || m.educationDetails?.educationName || m.educationDetails?.percentage || m.educationDetails?.cgpa ? (
             <span className="inline-flex items-center gap-1.5 text-emerald-700">
               <IconGraduationCap size={13} />
               {m.educationDetails?.educationLevel || m.educationDetails?.classOrYear || 'Student'}
             </span>
           ) : '—'}
         </td>
-      </tr>
-      {open && (
-        <tr className="bg-slate-50/30">
-          <td colSpan={10} className="px-0 py-0">
-            <MemberExpandRow m={m} />
-          </td>
-        </tr>
-      )}
-    </>
+    </tr>
   );
 }
 
@@ -270,7 +313,7 @@ export default function FamilyDetail() {
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [openRows, setOpenRows] = useState({});
+  const [selectedMemberIndex, setSelectedMemberIndex] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -286,14 +329,6 @@ export default function FamilyDetail() {
     })();
     return () => { active = false; };
   }, [id]);
-
-  const toggleRow = (i) => setOpenRows((o) => ({ ...o, [i]: !o[i] }));
-  const expandAll = (members) => {
-    const next = {};
-    members.forEach((_, i) => { next[i] = true; });
-    setOpenRows(next);
-  };
-  const collapseAll = () => setOpenRows({});
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -378,9 +413,6 @@ export default function FamilyDetail() {
   }
 
   const mm = record.mainMember || {};
-  const addr = record.address || {};
-  const bw = record.businessWork || {};
-  const addi = record.additionalInfo || {};
   const familyMembers = record.familyMembersLegacyMerged || record.familyMembers || [];
   const headerName = buildFullName(mm.firstName, mm.surname, mm.fullName) || 'Unnamed Record';
 
@@ -488,94 +520,23 @@ export default function FamilyDetail() {
           </div>
         )}
 
-        {/* Two column info cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
-          <DetailCard title="Personal Information" icon={<IconUser size={18} />} accent="brand">
-            <KV label="First Name" value={mm.firstName} />
-            <KV label="Surname" value={mm.surname} />
-            <KV label="Full Name" value={buildFullName(mm.firstName, mm.surname, mm.fullName)} />
-            <KV label="Gender" value={mm.gender} />
-            <KV label="Age" value={mm.age} />
-            <KV label="Date of Birth" value={mm.dateOfBirth} />
-            <KV label="Father's Name" value={mm.fatherName} />
-            <KV label="Mother's Name" value={mm.motherName} />
-            <KV label="Marital Status" value={mm.maritalStatus} />
-            {mm.maritalStatus === 'Single' && <KV label="Engaged" value={mm.engagementStatus} />}
-            <KV label="Mobile Number" value={mm.mobileNumber ? (
-              <span className="inline-flex items-center gap-1.5 font-mono">
-                <IconPhone size={13} className="text-slate-400" />
-                {mm.mobileNumber}
-              </span>
-            ) : undefined} />
-            <KV label="WhatsApp Number" value={mm.whatsappNumber} />
-            <KV label="Email" value={mm.email ? (
-              <span className="inline-flex items-center gap-1.5">
-                <IconMail size={13} className="text-slate-400" />
-                {mm.email}
-              </span>
-            ) : undefined} />
-            <KV label="Highest Education" value={mm.highestEducation} />
-            {(mm.aadhaarNumber || mm.panNumber) && (
-              <>
-                <KV label="Aadhaar Number" value={mm.aadhaarNumber} />
-                <KV label="PAN Number" value={mm.panNumber} />
-              </>
-            )}
-          </DetailCard>
-
-          <DetailCard title="Address & Location" icon={<IconMapPin size={18} />} accent="sky">
-            <KV label="Current Address" value={formatAddress(addr.current)} />
-            <KV label="Permanent Address" value={formatAddress(addr.permanent)} />
-            <KV label="Same as Current" value={addr.sameAsCurrent ? 'Yes' : 'No'} />
-            {record.submissionId && <KV label="Submission ID" value={record.submissionId} />}
-          </DetailCard>
-
-          <DetailCard title="Head of Family · Work / Business" icon={<IconBriefcase size={18} />} accent="amber">
-            <KV label="Occupation Type" value={bw.occupationType} />
-            <KV label="Business Name" value={bw.businessName} />
-            <KV label="Business Type" value={bw.businessType} />
-            <KV label="Industry" value={bw.industry} />
-            <KV label="Years In Business" value={bw.yearsInBusiness} />
-            <KV label="Job Title" value={bw.jobTitle} />
-            <KV label="Employer / Company" value={bw.employer} />
-            <KV label="Designation" value={bw.designation} />
-            <KV label="Years In Role" value={bw.yearsInRole} />
-            <KV label="Workplace Address" value={bw.workAddress} />
-            <KV label="Profession" value={bw.profession} />
-            <KV label="Organization / Practice" value={bw.organization} />
-            <KV label="Years Of Experience" value={bw.yearsExperience} />
-            <KV label="Institution" value={bw.institutionName} />
-            <KV label="Education Level" value={bw.educationLevel} />
-            <KV label="Course / Subject" value={bw.courseOrSubject} />
-            <KV label="Current Year / Class" value={bw.studyYear} />
-            <KV label="Study Status" value={bw.studentStatus} />
-            <KV label="Previous Occupation" value={bw.previousOccupation} />
-            <KV label="Retirement Year" value={bw.retirementYear} />
-            <KV label="Current Status / Reason" value={bw.notWorkingDetails} />
-            <KV label="Other Occupation Details" value={bw.otherOccupationDetails} />
-          </DetailCard>
-
-          <DetailCard title="Additional Information" icon={<IconFileText size={18} />} accent="purple">
-            <KV label="Achievements" value={addi.achievements} />
-            <KV label="Website" value={addi.professionalProfile} />
-            <KV label="Remarks / Notes" value={addi.remarks} />
-          </DetailCard>
-        </div>
-
-        <DetailCard title="Complete Family Details" icon={<IconFileText size={18} />} accent="brand">
-          <pre className="whitespace-pre-wrap break-words py-4 text-sm leading-relaxed text-slate-700">
-            {record.completeFamilyDetails || 'Complete details are unavailable for this record.'}
-          </pre>
+        <DetailCard title="Main Member" icon={<IconUser size={18} />} accent="brand">
+          <MainMemberDetails record={record} />
         </DetailCard>
 
         {/* Family members table */}
         <DetailCard
-          title={`Family Members (${familyMembers.length})`}
-          icon={<IconUsers size={18} />}
-          accent="emerald"
-          className="overflow-hidden"
-        >
-          {familyMembers.length === 0 ? (
+            title={`Family Members (${familyMembers.length})`}
+            icon={<IconUsers size={18} />}
+            accent="emerald"
+            className="overflow-hidden"
+          >
+            {typeof selectedMemberIndex === 'number' && familyMembers[selectedMemberIndex] ? (
+              <MemberDetails
+                m={familyMembers[selectedMemberIndex]}
+                onClose={() => setSelectedMemberIndex(null)}
+              />
+            ) : familyMembers.length === 0 ? (
             <div className="py-10">
               <EmptyState
                 icon={<IconHome size={32} />}
@@ -586,35 +547,17 @@ export default function FamilyDetail() {
             </div>
           ) : (
             <div className="py-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <p className="text-sm text-slate-500">
-                  Click the chevron on any row to view Work, Business, or Education details.
+                <p className="mb-3 text-sm text-slate-500">
+                  View details for an individual family member.
                 </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => expandAll(familyMembers)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all"
-                  >
-                    <IconChevronDown size={13} /> Expand All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={collapseAll}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all"
-                  >
-                    <IconChevronUp size={13} /> Collapse All
-                  </button>
-                </div>
-              </div>
 
-              {/* Desktop / Tablet Table */}
-              <div className="hidden md:block -mx-5 sm:-mx-6 overflow-x-auto">
+                {/* Desktop / Tablet Table */}
+                <div className="hidden md:block -mx-5 sm:-mx-6 overflow-x-auto">
                 <div className="min-w-[960px] px-5 sm:px-6">
                   <table className="w-full border-separate border-spacing-0">
                     <thead>
                       <tr className="text-left">
-                        <th className="px-3 sm:px-4 py-2.5 w-10" />
+                        <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Action</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">#</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Name</th>
                         <th className="px-3 sm:px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Relation</th>
@@ -632,8 +575,7 @@ export default function FamilyDetail() {
                           key={m._id || i}
                           m={m}
                           idx={i}
-                          open={!!openRows[i]}
-                          onToggle={() => toggleRow(i)}
+                          onView={() => setSelectedMemberIndex(i)}
                         />
                       ))}
                     </tbody>
@@ -643,20 +585,10 @@ export default function FamilyDetail() {
 
               {/* Mobile stacked cards */}
               <div className="md:hidden space-y-3">
-                {familyMembers.map((m, i) => {
-                  const wd = m.workDetails || {};
-                  const bd = m.businessDetails || {};
-                  const ed = m.educationDetails || {};
-                  const hasNested = wd.occupation || bd.businessName || ed.instituteName || ed.educationLevel || ed.classOrYear || ed.streamOrSubject || ed.courseOrDegree || ed.otherSubjectOrCourse || ed.educationStatus;
-                  const isLegacyFallback = !hasNested && m.jobProfession;
-                  return (
+                {familyMembers.map((m, i) => (
                     <div key={m._id || i} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => toggleRow(i)}
-                        className="w-full text-left px-4 py-3.5 hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between gap-3">
+                      <div className="px-4 py-3.5">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-[10px] font-mono text-slate-400">#{String(i + 1).padStart(2, '0')}</span>
@@ -675,20 +607,20 @@ export default function FamilyDetail() {
                               <span className="inline-flex items-center"><StatusBadge status={familyStatus(m)} /></span>
                             </div>
                           </div>
-                          {(hasNested || isLegacyFallback || m.workStatus === 'Retired' || m.workStatus === 'Not Working') && (
-                            <div className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 flex-shrink-0">
-                              {openRows[i] ? <IconChevronUp size={15} /> : <IconChevronDown size={15} />}
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMemberIndex(i)}
+                            className="inline-flex flex-shrink-0 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-100 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                          >
+                            View Details
+                          </button>
                         </div>
-                      </button>
-                      {openRows[i] && <MemberExpandRow m={m} />}
+                      </div>
                     </div>
-                  );
-                })}
+                ))}
               </div>
             </div>
-          )}
+            )}
         </DetailCard>
 
         <footer className="pt-2 text-xs text-slate-400 flex flex-wrap items-center justify-between gap-2">

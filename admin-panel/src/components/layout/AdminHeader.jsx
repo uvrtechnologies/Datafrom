@@ -16,6 +16,9 @@ import {
 const ROUTE_META = {
   '/dashboard': { title: 'Dashboard', crumbs: [{ label: 'Dashboard' }] },
   '/families': { title: 'All Family Records', crumbs: [{ label: 'Dashboard', to: '/dashboard' }, { label: 'Family Records' }] },
+  '/students': { title: 'Students', crumbs: [{ label: 'Dashboard', to: '/dashboard' }, { label: 'Students' }] },
+  '/business-owners': { title: 'Business Owners', crumbs: [{ label: 'Dashboard', to: '/dashboard' }, { label: 'Business Owners' }] },
+  '/professionals': { title: 'Professionals', crumbs: [{ label: 'Dashboard', to: '/dashboard' }, { label: 'Professionals' }] },
   '/analytics': { title: 'Analytics', crumbs: [{ label: 'Dashboard', to: '/dashboard' }, { label: 'Analytics' }] },
 };
 

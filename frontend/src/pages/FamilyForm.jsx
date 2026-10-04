@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MobileShell from '../components/MobileShell';
 import StepDots from '../components/StepDots';
@@ -91,13 +91,14 @@ export default function FamilyForm() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const pendingFocus = useRef('');
 
   const [mainMember, setMainMember] = useState({
-    firstName: '', surname: '', dateOfBirth: '', fatherName: '', motherName: '', gender: '', maritalStatus: '', engagementStatus: '',
+    firstName: '', surname: '', fullName: '', dateOfBirth: '', fatherName: '', motherName: '', gender: '', maritalStatus: '', engagementStatus: '',
     mobileNumber: '', whatsappNumber: '', email: '', highestEducation: '',
   });
-  const setMM = (field, value) => setMainMember((prev) => ({ ...prev, [field]: value }));
 
   const [step1Touched, setStep1Touched] = useState({});
   const touch = (field) => setStep1Touched((prev) => ({ ...prev, [field]: true }));
@@ -115,54 +116,94 @@ export default function FamilyForm() {
     profession: '', organization: '', yearsExperience: '', institutionName: '', educationLevel: '',
     courseOrSubject: '', studyYear: '', studentStatus: '', previousOccupation: '', retirementYear: '',
     otherOccupationDetails: '', notWorkingDetails: '',
+    resultType: '', percentage: '', cgpa: '', educationName: '', lastClassOrYear: '',
   });
-  const setBW = (field, value) => setBusinessWork((prev) => ({ ...prev, [field]: value }));
+  const setBW = (field, value) => {
+    clearFieldError(`main-${field}`);
+    clearFieldError(`student-${field}`);
+    setBusinessWork((prev) => ({ ...prev, [field]: value }));
+  };
 
   const [additionalInfo, setAdditionalInfo] = useState({
-    achievements: '', professionalProfile: '', remarks: '',
+    achievements: '', professionalProfile: '', remarks: '', startupPlan: '',
   });
-  const setAI = (field, value) => setAdditionalInfo((prev) => ({ ...prev, [field]: value }));
 
   const [confirmed, setConfirmed] = useState(false);
+  const [confirmationError, setConfirmationError] = useState('');
+
+  const clearFieldError = (field) => {
+    setFieldErrors((previous) => {
+      if (!previous[field]) return previous;
+      const next = { ...previous };
+      delete next[field];
+      return next;
+    });
+  };
+  const setMM = (field, value) => {
+    clearFieldError(`main-${field}`);
+    setMainMember((prev) => ({ ...prev, [field]: value }));
+  };
+  const setAI = (field, value) => {
+    if (field === 'professionalProfile') clearFieldError('additional-professionalProfile');
+    setAdditionalInfo((prev) => ({ ...prev, [field]: value }));
+  };
+
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    const fieldId = pendingFocus.current;
+    pendingFocus.current = '';
+    requestAnimationFrame(() => {
+      const field = document.getElementById(fieldId);
+      field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      field?.focus({ preventScroll: true });
+    });
+  }, [step, fieldErrors, memberErrors, confirmationError]);
+
+  const showFieldError = (field) => fieldErrors[field]
+    ? <div className={errCls} role="alert">{fieldErrors[field]}</div>
+    : null;
+
+  const failField = (field, message, targetStep = step) => {
+    setFieldErrors((previous) => ({ ...previous, [field]: message }));
+    pendingFocus.current = field;
+    setStep(targetStep);
+    return false;
+  };
 
   const toggleSameAsCurrent = (checked) => {
     setSameAsCurrent(checked);
     if (checked) setPermanentAddress(currentAddress);
   };
   const updateCurrentAddress = (key, value) => {
+    clearFieldError(`current-${key}`);
     const updated = { ...currentAddress, [key]: value };
     setCurrentAddress(updated);
     if (sameAsCurrent) setPermanentAddress(updated);
   };
 
-  const firstNameCode = validateName(mainMember.firstName);
-  const surnameCode = validateName(mainMember.surname);
+  const fullNameCode = validateName(mainMember.fullName);
   const mobileCode = validateMobile(mainMember.mobileNumber);
 
   const validateStep1 = () => {
-    setStep1Touched({ firstName: true, surname: true, mobileNumber: true, email: true, whatsappNumber: true });
+    setFieldErrors({});
+    setStep1Touched({ fullName: true, mobileNumber: true, email: true, whatsappNumber: true });
 
-    if (firstNameCode) { setError(nameErrorMsg(firstNameCode, 'First name')); return false; }
-    if (surnameCode) { setError(nameErrorMsg(surnameCode, 'Surname')); return false; }
-    if (mobileCode) { setError(mobileErrorMsg(mobileCode)); return false; }
+    if (fullNameCode) return failField('main-fullName', nameErrorMsg(fullNameCode, 'Full name'), 1);
+    if (mobileCode) return failField('main-mobileNumber', mobileErrorMsg(mobileCode), 1);
     if (!mainMember.gender) {
-      setError('Please select your gender.');
-      return false;
+      return failField('main-gender', 'Please select your gender.', 1);
     }
     if (!mainMember.maritalStatus) {
-      setError('Please select your marital status.');
-      return false;
+      return failField('main-maritalStatus', 'Please select your marital status.', 1);
     }
     if (mainMember.maritalStatus === 'Single' && !mainMember.engagementStatus) {
-      setError('Please select your engagement status.');
-      return false;
+      return failField('main-engagementStatus', 'Please select your engagement status.', 1);
     }
 
     if (mainMember.email) {
       const emailTrimmed = mainMember.email.trim();
       if (!EMAIL_REGEX.test(emailTrimmed)) {
-        setError('Please enter a valid email address.');
-        return false;
+        return failField('main-email', 'Please enter a valid email address.', 1);
       }
     }
     if (mainMember.whatsappNumber) {
@@ -170,45 +211,75 @@ export default function FamilyForm() {
       const waDigits = waRaw.replace(/\D/g, '');
       const waOk = waDigits.length === 10 && INDIAN_MOBILE_REGEX.test(waDigits);
       if (!waOk) {
-        setError('Please enter a valid WhatsApp number.');
-        return false;
+        return failField('main-whatsappNumber', 'Please enter a valid WhatsApp number.', 1);
       }
     }
     if (!businessWork.occupationType) {
-      setError('Please select your current occupation.');
-      return false;
+      return failField('main-occupationType', 'Please select your current occupation.', 1);
     }
-    if (businessWork.occupationType === 'Student' && (!businessWork.institutionName.trim() || !businessWork.educationLevel)) {
-      setError('Please provide the institution name and education level.');
-      return false;
+    if (businessWork.occupationType === 'Student') {
+      const lvl = businessWork.educationLevel;
+      const courseLevels = ['College', 'Diploma', 'Professional Degree', 'Master Degree'];
+      if (!String(businessWork.institutionName || '').trim()) {
+        return failField('student-institutionName', 'Institution name is required for Student.', 1);
+      }
+      if (!lvl) return failField('student-educationLevel', 'Education level is required for Student.', 1);
+      if (courseLevels.includes(lvl) && !String(businessWork.courseOrSubject || '').trim()) {
+        return failField('student-courseOrSubject', 'Course / Degree is required for Student.', 1);
+      }
+      if (!String(businessWork.studyYear || businessWork.lastClassOrYear || '').trim()) {
+        return failField('student-studyYear', 'Last completed year / class is required for Student.', 1);
+      }
+      if (lvl === 'Other Special' && !String(businessWork.educationName || '').trim()) {
+        return failField('student-educationName', 'Education name is required for Student.', 1);
+      }
+      if (!businessWork.studentStatus) return failField('student-studentStatus', 'Study status is required for Student.', 1);
+      if (!businessWork.resultType) return failField('student-resultType', 'Result type is required for Student.', 1);
+      if (businessWork.resultType === 'Percentage' && String(businessWork.percentage || '').trim() === '') {
+        return failField('student-percentage', 'Percentage is required for Student.', 1);
+      }
+      if (businessWork.resultType === 'CGPA' && String(businessWork.cgpa || '').trim() === '') {
+        return failField('student-cgpa', 'CGPA is required for Student.', 1);
+      }
+      if (businessWork.resultType === 'Percentage') {
+        const pct = Number(businessWork.percentage);
+        if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+          return failField('student-percentage', 'Percentage must be between 0 and 100.', 1);
+        }
+      }
+      if (businessWork.resultType === 'CGPA') {
+        const cg = Number(businessWork.cgpa);
+        if (Number.isNaN(cg) || cg < 0 || cg > 10) {
+          return failField('student-cgpa', 'CGPA must be between 0 and 10.', 1);
+        }
+      }
     }
     if (businessWork.occupationType === 'Not Working' && !businessWork.notWorkingDetails.trim()) {
-      setError('Please share the current status or reason for not working.');
-      return false;
+      return failField('main-notWorkingDetails', 'Please share the current status or reason for not working.', 1);
     }
     if (businessWork.occupationType === 'Other' && !businessWork.otherOccupationDetails.trim()) {
-      setError('Please describe your occupation.');
-      return false;
+      return failField('main-otherOccupationDetails', 'Please describe your occupation.', 1);
     }
     if (businessWork.yearsInBusiness !== '' && Number(businessWork.yearsInBusiness) < 0) {
-      setError('Years in business cannot be negative.');
-      return false;
+      return failField('main-yearsInBusiness', 'Years in business cannot be negative.', 1);
     }
     setError('');
     return true;
   };
 
   const validateAddress = (address, label) => {
+    const prefix = label === 'current' ? 'current' : 'permanent';
     const addressLine1 = String(address.addressLine1 || '').trim();
-    if (!addressLine1) { setError(`Please complete Address Line 1 in the ${label} address.`); return false; }
-    if (addressLine1.length < 5) { setError(`Address Line 1 in the ${label} address must be at least 5 characters.`); return false; }
-    if (addressLine1.length > 150) { setError(`Address Line 1 in the ${label} address must be at most 150 characters.`); return false; }
-    if (!VILLAGE_OPTIONS.slice(1).includes(address.village)) { setError(`Please select a valid Village in the ${label} address.`); return false; }
-    if (!CITY_OPTIONS.slice(1).includes(address.city)) { setError(`Please select a valid City in the ${label} address.`); return false; }
+    if (!addressLine1) return failField(`${prefix}-addressLine1`, `Address Line 1 is required in the ${label} address.`, 2);
+    if (addressLine1.length < 5) return failField(`${prefix}-addressLine1`, `Address Line 1 in the ${label} address must be at least 5 characters.`, 2);
+    if (addressLine1.length > 150) return failField(`${prefix}-addressLine1`, `Address Line 1 in the ${label} address must be at most 150 characters.`, 2);
+    if (!VILLAGE_OPTIONS.slice(1).includes(address.village)) return failField(`${prefix}-village`, `Please select a valid Village in the ${label} address.`, 2);
+    if (!CITY_OPTIONS.slice(1).includes(address.city)) return failField(`${prefix}-city`, `Please select a valid City in the ${label} address.`, 2);
     return true;
   };
 
   const validateStep2 = () => {
+    setFieldErrors({});
     if (!validateAddress(currentAddress, 'current')) return false;
     if (!sameAsCurrent && !validateAddress(permanentAddress, 'permanent')) return false;
     setError('');
@@ -219,7 +290,9 @@ export default function FamilyForm() {
     const errs = familyMembers.map((member, index) => validateMember(member, index));
     if (errs.some(Boolean)) {
       setMemberErrors(errs);
-      setError('Please fix the highlighted family member fields before continuing.');
+      const firstIndex = errs.findIndex(Boolean);
+      pendingFocus.current = `family-member-${firstIndex}-${errs[firstIndex].field}`;
+      setStep(3);
       return false;
     }
     setMemberErrors([]);
@@ -228,38 +301,35 @@ export default function FamilyForm() {
   };
 
   const validateStep4 = () => {
+    setFieldErrors({});
     if (additionalInfo.professionalProfile && !URL_REGEX.test(additionalInfo.professionalProfile.trim())) {
-      setError('Please enter a valid professional profile URL starting with http:// or https://.');
-      return false;
+      return failField('additional-professionalProfile', 'Enter a valid profile URL starting with http:// or https://.', 1);
     }
     setError('');
     return true;
   };
 
   const next = () => {
-    const validators = {
-      1: validateStep1,
-      2: validateStep2,
-      3: validateStep3,
-      4: validateStep4,
-    };
+    const validators = { 1: () => validateStep1() && validateStep4(), 2: validateStep2, 3: validateStep3 };
     if (validators[step] && !validators[step]()) return;
     setError('');
+    setFieldErrors({});
     setMemberErrors([]);
-    setStep((s) => Math.min(s + 1, 5));
+    setStep((s) => Math.min(s + 1, 4));
     window.scrollTo(0, 0);
   };
   const back = () => { setStep((s) => Math.max(s - 1, 1)); setMemberErrors([]); window.scrollTo(0, 0); };
 
   const handleSubmit = async () => {
     if (!confirmed) {
-      setError('Please confirm that the information provided is correct.');
+      setConfirmationError('Please confirm that the information provided is correct.');
+      pendingFocus.current = 'review-confirmed';
       return;
     }
-    const stepValid = validateStep1() && validateStep2() && validateStep3() && validateStep4();
-    if (!stepValid) {
-      setStep(1);
-      window.scrollTo(0, 0);
+    setConfirmationError('');
+    if (!validateStep1() || !validateStep4()) return;
+    if (!validateStep2()) return;
+    if (!validateStep3()) {
       return;
     }
     setSubmitting(true);
@@ -269,7 +339,6 @@ export default function FamilyForm() {
       Object.keys(trimmedMM).forEach((k) => {
         if (typeof trimmedMM[k] === 'string') trimmedMM[k] = trimmedMM[k].trim();
       });
-      trimmedMM.fullName = `${trimmedMM.firstName} ${trimmedMM.surname}`.trim();
 
       const cleanAddr = (a) => {
         const out = {};
@@ -285,6 +354,7 @@ export default function FamilyForm() {
 
       const cleanMembers = familyMembers.map((m) => {
         const out = { ...m };
+        delete out._formId;
         if (typeof out.firstName === 'string') out.firstName = out.firstName.trim();
         if (typeof out.surname === 'string') out.surname = out.surname.trim();
         if (!out.fullName && (out.firstName || out.surname)) {
@@ -319,48 +389,45 @@ export default function FamilyForm() {
   return (
     <MobileShell>
       <div className="bg-white rounded-2xl shadow-md p-5">
-        <StepDots current={step} total={5} />
+        <StepDots current={step} total={4} />
 
         {error && <div className="mb-4 rounded-lg bg-red-50 text-red-700 border border-red-200 p-3 text-sm">{error}</div>}
 
         {step === 1 && (
           <div>
-            <h2 className="font-serif font-bold text-brand-700 text-xl mb-4">1. Your Personal Details</h2>
-            <Field label="First Name" required>
+            <h2 className="font-serif font-bold text-brand-700 text-xl mb-4">1. Personal &amp; Additional Details</h2>
+            <Field label="Full Name" required>
               <input
+                id="main-fullName"
                 className={inputCls}
-                placeholder="e.g. John"
-                value={mainMember.firstName}
-                onChange={(e) => setMM('firstName', e.target.value)}
-                onBlur={() => touch('firstName')}
-                maxLength={50}
+                placeholder="e.g. Rajesh Kumar Sharma"
+                value={mainMember.fullName || ''}
+                onChange={(e) => setMM('fullName', e.target.value)}
+                onBlur={() => touch('fullName')}
+                maxLength={100}
               />
-              {step1Touched.firstName && firstNameCode && (
-                <div className={errCls}>{nameErrorMsg(firstNameCode, 'First name')}</div>
+              {step1Touched.fullName && fullNameCode && !fieldErrors['main-fullName'] && (
+                <div className={errCls}>{nameErrorMsg(fullNameCode, 'Full name')}</div>
               )}
-            </Field>
-            <Field label="Surname" required>
-              <input
-                className={inputCls}
-                placeholder="e.g. Doe"
-                value={mainMember.surname}
-                onChange={(e) => setMM('surname', e.target.value)}
-                onBlur={() => touch('surname')}
-                maxLength={50}
-              />
-              {step1Touched.surname && surnameCode && (
-                <div className={errCls}>{nameErrorMsg(surnameCode, 'Surname')}</div>
-              )}
+              {showFieldError('main-fullName')}
             </Field>
             <Field label="Date of Birth"><input type="date" className={inputCls} value={mainMember.dateOfBirth} onChange={(e) => setMM('dateOfBirth', e.target.value)} /></Field>
             <Field label="Father's Name"><input className={inputCls} placeholder="Enter father's name" value={mainMember.fatherName} onChange={(e) => setMM('fatherName', e.target.value.trimStart())} /></Field>
             <Field label="Mother's Name"><input className={inputCls} placeholder="Enter mother's name" value={mainMember.motherName} onChange={(e) => setMM('motherName', e.target.value.trimStart())} /></Field>
-            <Field label="Gender" required><RadioPills name="gender" options={['Male', 'Female', 'Other']} value={mainMember.gender} onChange={(v) => setMM('gender', v)} /></Field>
+            <Field label="Gender" required>
+              <div id="main-gender" tabIndex={-1}>
+                <RadioPills name="gender" options={['Male', 'Female', 'Other']} value={mainMember.gender} onChange={(v) => setMM('gender', v)} />
+              </div>
+              {showFieldError('main-gender')}
+            </Field>
             <Field label="Marital Status" required>
               <select
+                id="main-maritalStatus"
                 className={inputCls}
                 value={mainMember.maritalStatus}
                 onChange={(e) => {
+                  clearFieldError('main-maritalStatus');
+                  clearFieldError('main-engagementStatus');
                   const maritalStatus = e.target.value;
                   setMainMember((prev) => ({
                     ...prev,
@@ -372,17 +439,20 @@ export default function FamilyForm() {
                 <option value="">Select status</option>
                 <option>Single</option><option>Married</option><option>Widowed</option><option>Divorced</option>
               </select>
+              {showFieldError('main-maritalStatus')}
             </Field>
             {mainMember.maritalStatus === 'Single' && (
               <Field label="Are you engaged?" required>
-                <select className={inputCls} value={mainMember.engagementStatus} onChange={(e) => setMM('engagementStatus', e.target.value)}>
+                <select id="main-engagementStatus" className={inputCls} value={mainMember.engagementStatus} onChange={(e) => setMM('engagementStatus', e.target.value)}>
                   <option value="">Select status</option>
                   <option>Yes</option><option>No</option>
                 </select>
+                {showFieldError('main-engagementStatus')}
               </Field>
             )}
             <Field label="Mobile Number" required>
               <input
+                id="main-mobileNumber"
                 className={inputCls}
                 placeholder="e.g. 9876543210"
                 value={mainMember.mobileNumber}
@@ -390,12 +460,14 @@ export default function FamilyForm() {
                 onBlur={() => touch('mobileNumber')}
                 maxLength={15}
               />
-              {step1Touched.mobileNumber && mobileCode && (
+              {step1Touched.mobileNumber && mobileCode && !fieldErrors['main-mobileNumber'] && (
                 <div className={errCls}>{mobileErrorMsg(mobileCode)}</div>
               )}
+              {showFieldError('main-mobileNumber')}
             </Field>
             <Field label="WhatsApp Number">
               <input
+                id="main-whatsappNumber"
                 className={inputCls}
                 placeholder="e.g. 9876543210"
                 value={mainMember.whatsappNumber}
@@ -403,9 +475,11 @@ export default function FamilyForm() {
                 onBlur={() => touch('whatsappNumber')}
                 maxLength={15}
               />
+              {showFieldError('main-whatsappNumber')}
             </Field>
             <Field label="Email Address">
               <input
+                id="main-email"
                 className={inputCls}
                 type="email"
                 placeholder="john.doe@example.com"
@@ -416,6 +490,7 @@ export default function FamilyForm() {
               {step1Touched.email && mainMember.email && !EMAIL_REGEX.test(mainMember.email.trim()) && mainMember.email.trim() && (
                 <div className={errCls}>Please enter a valid email address.</div>
               )}
+              {showFieldError('main-email')}
             </Field>
             <Field label="Highest Education"><input className={inputCls} placeholder="e.g. Bachelor's Degree" value={mainMember.highestEducation} onChange={(e) => setMM('highestEducation', e.target.value.trimStart())} /></Field>
 
@@ -424,7 +499,10 @@ export default function FamilyForm() {
                 Current Occupation <span className="text-red-500">*</span>
               </h3>
               <span className="text-sm font-semibold text-gray-700">What is your current occupation?</span>
-              <ChoiceGrid options={OCCUPATION_TYPES} value={businessWork.occupationType} onChange={(v) => setBW('occupationType', v)} />
+              <div id="main-occupationType" tabIndex={-1}>
+                <ChoiceGrid options={OCCUPATION_TYPES} value={businessWork.occupationType} onChange={(v) => setBW('occupationType', v)} />
+              </div>
+              {showFieldError('main-occupationType')}
 
               {(businessWork.occupationType === 'Business Owner' || businessWork.occupationType === 'Self Employed') && (
                 <div className="mt-6">
@@ -440,7 +518,7 @@ export default function FamilyForm() {
                     </select>
                   </Field>
                   <Field label="Industry"><input className={inputCls} placeholder="e.g. Technology" value={businessWork.industry} onChange={(e) => setBW('industry', e.target.value.trimStart())} /></Field>
-                  <Field label="Years in Business"><input type="number" min="0" className={inputCls} placeholder="0" value={businessWork.yearsInBusiness} onChange={(e) => setBW('yearsInBusiness', e.target.value)} /></Field>
+                  <Field label="Years in Business"><input id="main-yearsInBusiness" type="number" min="0" className={inputCls} placeholder="0" value={businessWork.yearsInBusiness} onChange={(e) => setBW('yearsInBusiness', e.target.value)} />{showFieldError('main-yearsInBusiness')}</Field>
                   <Field label="Business Address"><input className={inputCls} placeholder="123 Business Rd, Suite 100" value={businessWork.businessAddress} onChange={(e) => setBW('businessAddress', e.target.value.trimStart())} /></Field>
                 </div>
               )}
@@ -469,17 +547,69 @@ export default function FamilyForm() {
               {businessWork.occupationType === 'Student' && (
                 <div className="mt-6">
                   <h3 className="text-sm font-bold text-gray-800 mb-3">Student Details</h3>
-                  <Field label="School / College / Institution" required><input className={inputCls} value={businessWork.institutionName} onChange={(e) => setBW('institutionName', e.target.value.trimStart())} /></Field>
+                  <Field label="School / College / Institution" required><input id="student-institutionName" className={inputCls} value={businessWork.institutionName} onChange={(e) => setBW('institutionName', e.target.value.trimStart())} />{showFieldError('student-institutionName')}</Field>
                   <Field label="Education Level" required>
-                    <select className={inputCls} value={businessWork.educationLevel} onChange={(e) => setBW('educationLevel', e.target.value)}>
-                      <option value="">Select Level</option><option>Primary School</option><option>Secondary School</option><option>Higher Secondary</option><option>Diploma</option><option>Undergraduate</option><option>Postgraduate</option><option>Other</option>
+                    <select id="student-educationLevel" className={inputCls} value={businessWork.educationLevel} onChange={(e) => setBW('educationLevel', e.target.value)}>
+                      <option value="">Select Level</option>
+                      <option>School</option>
+                      <option>College</option>
+                      <option>Diploma</option>
+                      <option>Professional Degree</option>
+                      <option>Master Degree</option>
+                      <option>Other Special</option>
                     </select>
+                    {showFieldError('student-educationLevel')}
                   </Field>
-                  <Field label="Course / Subject"><input className={inputCls} value={businessWork.courseOrSubject} onChange={(e) => setBW('courseOrSubject', e.target.value.trimStart())} /></Field>
-                  <Field label="Current Year / Class"><input className={inputCls} value={businessWork.studyYear} onChange={(e) => setBW('studyYear', e.target.value.trimStart())} /></Field>
-                  <Field label="Study Status">
-                    <select className={inputCls} value={businessWork.studentStatus} onChange={(e) => setBW('studentStatus', e.target.value)}><option value="">Select Status</option><option>Currently Studying</option><option>On Leave</option><option>Completed</option></select>
+                  {['College', 'Diploma', 'Professional Degree', 'Master Degree'].includes(businessWork.educationLevel) && (
+                    <Field label="Course / Degree" required><input id="student-courseOrSubject" className={inputCls} value={businessWork.courseOrSubject} onChange={(e) => setBW('courseOrSubject', e.target.value.trimStart())} />{showFieldError('student-courseOrSubject')}</Field>
+                  )}
+                  {businessWork.educationLevel === 'Other Special' && (
+                    <Field label="Education Name (required for Other Special)" required>
+                      <input id="student-educationName" className={inputCls} placeholder="e.g. Computer Course" value={businessWork.educationName || ''} onChange={(e) => setBW('educationName', e.target.value.trimStart())} />
+                      {showFieldError('student-educationName')}
+                    </Field>
+                  )}
+                  <Field label="Last Completed Year / Class" required>
+                    <input
+                      id="student-studyYear"
+                      className={inputCls}
+                      value={businessWork.studyYear}
+                      onChange={(e) => {
+                        const v = e.target.value.trimStart();
+                        setBW('studyYear', v);
+                        setBW('lastClassOrYear', v);
+                      }}
+                    />
+                    {showFieldError('student-studyYear')}
                   </Field>
+                  <Field label="Study Status" required>
+                    <select id="student-studentStatus" className={inputCls} value={businessWork.studentStatus} onChange={(e) => setBW('studentStatus', e.target.value)}><option value="">Select Status</option><option>Currently Studying</option><option>On Leave</option><option>Completed</option></select>
+                    {showFieldError('student-studentStatus')}
+                  </Field>
+                  <Field label="Result Type" required>
+                    <div id="student-resultType" tabIndex={-1}>
+                      <RadioPills name="resultType" options={['Percentage', 'CGPA']} value={businessWork.resultType} onChange={(v) => setBW('resultType', v)} />
+                    </div>
+                    {showFieldError('student-resultType')}
+                  </Field>
+                  {businessWork.resultType === 'Percentage' && (
+                    <Field label="Percentage" required>
+                      <input id="student-percentage" className={inputCls} value={businessWork.percentage} onChange={(e) => setBW('percentage', e.target.value)} />
+                      {showFieldError('student-percentage')}
+                      {businessWork.percentage !== '' && (Number(businessWork.percentage) < 0 || Number(businessWork.percentage) > 100) && (
+                        <div className={errCls}>Percentage must be between 0 and 100.</div>
+                      )}
+                    </Field>
+                  )}
+                  {businessWork.resultType === 'CGPA' && (
+                    <Field label="CGPA" required>
+                      <input id="student-cgpa" className={inputCls} value={businessWork.cgpa} onChange={(e) => setBW('cgpa', e.target.value)} />
+                      {showFieldError('student-cgpa')}
+                      {businessWork.cgpa !== '' && (Number(businessWork.cgpa) < 0 || Number(businessWork.cgpa) > 10) && (
+                        <div className={errCls}>CGPA must be between 0 and 10.</div>
+                      )}
+                    </Field>
+                  )}
                 </div>
               )}
 
@@ -493,15 +623,35 @@ export default function FamilyForm() {
 
               {businessWork.occupationType === 'Not Working' && (
                 <Field label="Current Status / Reason" required>
-                  <textarea className={inputCls} rows={3} placeholder="Please tell us your current status or reason for not working" value={businessWork.notWorkingDetails} onChange={(e) => setBW('notWorkingDetails', e.target.value)} />
+                  <textarea id="main-notWorkingDetails" className={inputCls} rows={3} placeholder="Please tell us your current status or reason for not working" value={businessWork.notWorkingDetails} onChange={(e) => setBW('notWorkingDetails', e.target.value)} />
+                  {showFieldError('main-notWorkingDetails')}
                 </Field>
               )}
 
               {businessWork.occupationType === 'Other' && (
                 <Field label="Describe Your Occupation" required>
-                  <textarea className={inputCls} rows={3} placeholder="Please describe your occupation" value={businessWork.otherOccupationDetails} onChange={(e) => setBW('otherOccupationDetails', e.target.value)} />
+                  <textarea id="main-otherOccupationDetails" className={inputCls} rows={3} placeholder="Please describe your occupation" value={businessWork.otherOccupationDetails} onChange={(e) => setBW('otherOccupationDetails', e.target.value)} />
+                  {showFieldError('main-otherOccupationDetails')}
                 </Field>
               )}
+            </div>
+
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <h3 className="font-serif font-bold text-brand-700 text-xl mb-1">Additional Information</h3>
+              <p className="text-sm text-gray-500 mb-4">Share any supplementary details to complete your profile.</p>
+              <Card title="🏅 Notable Achievements">
+                <input className={inputCls} placeholder="Awards, certifications, honors..." value={additionalInfo.achievements} onChange={(e) => setAI('achievements', e.target.value.trimStart())} />
+              </Card>
+              <Card title="🌐 Professional Profiles / Website">
+                <input id="additional-professionalProfile" className={inputCls} placeholder="https://..." value={additionalInfo.professionalProfile} onChange={(e) => setAI('professionalProfile', e.target.value.trim())} />
+                {showFieldError('additional-professionalProfile')}
+              </Card>
+              <Field label="Additional Remarks" hint="Is there anything else you would like to share that hasn't been covered in previous sections?">
+                <textarea className={inputCls} rows={4} placeholder="Type your additional comments here..." value={additionalInfo.remarks} onChange={(e) => setAI('remarks', e.target.value)} />
+              </Field>
+              <Field label="Startup Plan (Optional)" hint="Share any business or startup idea you are planning.">
+                <textarea className={inputCls} rows={4} placeholder="Describe your startup or business plan..." value={additionalInfo.startupPlan} onChange={(e) => setAI('startupPlan', e.target.value)} />
+              </Field>
             </div>
           </div>
         )}
@@ -512,16 +662,18 @@ export default function FamilyForm() {
             <p className="text-sm text-gray-500 mb-4">Please provide the current and permanent residential information.</p>
 
             <Card title="📍 Current Address">
-              <Field label="Address Line 1" required><input className={inputCls} placeholder="Street address, P.O. box, company name" value={currentAddress.addressLine1} onChange={(e) => updateCurrentAddress('addressLine1', e.target.value.trimStart())} maxLength={150} /></Field>
+              <Field label="Address Line 1" required><input id="current-addressLine1" className={inputCls} placeholder="Street address, P.O. box, company name" value={currentAddress.addressLine1} onChange={(e) => updateCurrentAddress('addressLine1', e.target.value.trimStart())} maxLength={150} />{showFieldError('current-addressLine1')}</Field>
               <Field label="Village" required>
-                <select className={inputCls} value={currentAddress.village} onChange={(e) => updateCurrentAddress('village', e.target.value)}>
+                <select id="current-village" className={inputCls} value={currentAddress.village} onChange={(e) => updateCurrentAddress('village', e.target.value)}>
                   {VILLAGE_OPTIONS.map((village) => <option key={village} value={village === 'Select Village' ? '' : village}>{village}</option>)}
                 </select>
+                {showFieldError('current-village')}
               </Field>
               <Field label="City" required>
-                <select className={inputCls} value={currentAddress.city} onChange={(e) => updateCurrentAddress('city', e.target.value)}>
+                <select id="current-city" className={inputCls} value={currentAddress.city} onChange={(e) => updateCurrentAddress('city', e.target.value)}>
                   {CITY_OPTIONS.map((city) => <option key={city} value={city === 'Select City' ? '' : city}>{city}</option>)}
                 </select>
+                {showFieldError('current-city')}
               </Field>
             </Card>
 
@@ -532,16 +684,18 @@ export default function FamilyForm() {
 
             {!sameAsCurrent && (
               <Card title="📍 Permanent Address">
-                <Field label="Address Line 1" required><input className={inputCls} value={permanentAddress.addressLine1} onChange={(e) => setPermanentAddress({ ...permanentAddress, addressLine1: e.target.value.trimStart() })} maxLength={150} /></Field>
+                <Field label="Address Line 1" required><input id="permanent-addressLine1" className={inputCls} value={permanentAddress.addressLine1} onChange={(e) => { clearFieldError('permanent-addressLine1'); setPermanentAddress({ ...permanentAddress, addressLine1: e.target.value.trimStart() }); }} maxLength={150} />{showFieldError('permanent-addressLine1')}</Field>
                 <Field label="Village" required>
-                  <select className={inputCls} value={permanentAddress.village} onChange={(e) => setPermanentAddress({ ...permanentAddress, village: e.target.value })}>
+                  <select id="permanent-village" className={inputCls} value={permanentAddress.village} onChange={(e) => { clearFieldError('permanent-village'); setPermanentAddress({ ...permanentAddress, village: e.target.value }); }}>
                     {VILLAGE_OPTIONS.map((village) => <option key={village} value={village === 'Select Village' ? '' : village}>{village}</option>)}
                   </select>
+                  {showFieldError('permanent-village')}
                 </Field>
                 <Field label="City" required>
-                  <select className={inputCls} value={permanentAddress.city} onChange={(e) => setPermanentAddress({ ...permanentAddress, city: e.target.value })}>
+                  <select id="permanent-city" className={inputCls} value={permanentAddress.city} onChange={(e) => { clearFieldError('permanent-city'); setPermanentAddress({ ...permanentAddress, city: e.target.value }); }}>
                     {CITY_OPTIONS.map((city) => <option key={city} value={city === 'Select City' ? '' : city}>{city}</option>)}
                   </select>
+                  {showFieldError('permanent-city')}
                 </Field>
               </Card>
             )}
@@ -557,7 +711,7 @@ export default function FamilyForm() {
             )}
             {familyMembers.map((m, idx) => (
               <FamilyMemberForm
-                key={idx} index={idx} member={m}
+                key={m._formId || idx} index={idx} member={m}
                 error={memberErrors[idx]}
                 onChange={(updated) => {
                   setFamilyMembers((prev) => prev.map((p, i) => (i === idx ? updated : p)));
@@ -586,24 +740,6 @@ export default function FamilyForm() {
         )}
 
         {step === 4 && (
-          <div>
-            <h2 className="font-serif font-bold text-brand-700 text-2xl mb-1">Additional Information</h2>
-            <p className="text-sm text-gray-500 mb-5">Please provide any supplementary details to complete your profile.</p>
-
-            <Card title="🏅 Notable Achievements">
-              <input className={inputCls} placeholder="Awards, certifications, honors..." value={additionalInfo.achievements} onChange={(e) => setAI('achievements', e.target.value.trimStart())} />
-            </Card>
-            <Card title="🌐 Professional Profiles / Website">
-              <input className={inputCls} placeholder="https://..." value={additionalInfo.professionalProfile} onChange={(e) => setAI('professionalProfile', e.target.value.trim())} />
-            </Card>
-
-            <Field label="Additional Remarks" hint="Is there anything else you would like to share that hasn't been covered in previous sections?">
-              <textarea className={inputCls} rows={4} placeholder="Type your additional comments here..." value={additionalInfo.remarks} onChange={(e) => setAI('remarks', e.target.value)} />
-            </Field>
-          </div>
-        )}
-
-        {step === 5 && (
           <Review
             mainMember={mainMember}
             currentAddress={currentAddress}
@@ -611,9 +747,13 @@ export default function FamilyForm() {
             familyMembers={familyMembers}
             businessWork={businessWork}
             additionalInfo={additionalInfo}
-            onEditStep={(s) => { setStep(s); window.scrollTo(0, 0); }}
+            onEditStep={(s) => { setStep(s); setFieldErrors({}); window.scrollTo(0, 0); }}
             confirmed={confirmed}
-            setConfirmed={setConfirmed}
+            setConfirmed={(value) => {
+              setConfirmed(value);
+              if (value) setConfirmationError('');
+            }}
+            confirmationError={confirmationError}
           />
         )}
 
@@ -621,7 +761,7 @@ export default function FamilyForm() {
           <button type="button" onClick={back} disabled={step === 1} className="text-gray-600 font-semibold text-sm disabled:opacity-30">
             ← {step === 1 ? 'Back' : 'Previous Step'}
           </button>
-          {step < 5 ? (
+          {step < 4 ? (
             <button type="button" onClick={next} className="px-6 py-2.5 rounded-lg bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700">
               Next Step →
             </button>
