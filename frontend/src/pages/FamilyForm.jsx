@@ -50,7 +50,7 @@ const VILLAGE_OPTIONS = [
   'Kurawad'
   ,'other'
 ];
-const NAME_REGEX = /^[A-Za-z\s]+$/;
+const NAME_REGEX = /^[A-Za-z\s.'\-]+$/;
 const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const URL_REGEX = /^https?:\/\/[^\s]+$/i;
@@ -61,7 +61,7 @@ function validateName(value) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return 'required';
   if (trimmed.length < 2) return 'min';
-  if (trimmed.length > 50) return 'max';
+  if (trimmed.length > 100) return 'max';
   if (!NAME_REGEX.test(trimmed)) return 'format';
   return null;
 }
@@ -69,8 +69,8 @@ function validateName(value) {
 function nameErrorMsg(code, label) {
   if (code === 'required') return `${label} is required.`;
   if (code === 'min') return `${label} must be at least 2 characters.`;
-  if (code === 'max') return `${label} must be at most 50 characters.`;
-  if (code === 'format') return `${label} can contain letters and spaces only.`;
+  if (code === 'max') return `${label} must be at most 100 characters.`;
+  if (code === 'format') return `${label} can contain letters, spaces, dots, hyphens, and apostrophes only.`;
   return '';
 }
 
@@ -96,7 +96,7 @@ export default function FamilyForm() {
   const pendingFocus = useRef('');
 
   const [mainMember, setMainMember] = useState({
-    firstName: '', surname: '', fullName: '', dateOfBirth: '', fatherName: '', motherName: '', gender: '', maritalStatus: '', engagementStatus: '',
+    fullName: '', dateOfBirth: '', fatherName: '', motherName: '', gender: '', maritalStatus: '', engagementStatus: '',
     mobileNumber: '', whatsappNumber: '', email: '', highestEducation: '',
   });
 
@@ -117,6 +117,7 @@ export default function FamilyForm() {
     courseOrSubject: '', studyYear: '', studentStatus: '', previousOccupation: '', retirementYear: '',
     otherOccupationDetails: '', notWorkingDetails: '',
     resultType: '', percentage: '', cgpa: '', educationName: '', lastClassOrYear: '',
+    farmType: '', yearsFarming: '', farmAddress: '',
   });
   const setBW = (field, value) => {
     clearFieldError(`main-${field}`);
@@ -254,14 +255,49 @@ export default function FamilyForm() {
         }
       }
     }
+    if (businessWork.occupationType === 'Business Owner' || businessWork.occupationType === 'Self Employed') {
+      if (!String(businessWork.businessName || '').trim()) return failField('main-businessName', 'Business Name is required.', 1);
+      if (!businessWork.businessType) return failField('main-businessType', 'Business Type is required.', 1);
+      if (!String(businessWork.industry || '').trim()) return failField('main-industry', 'Industry is required.', 1);
+      if (String(businessWork.yearsInBusiness || '').trim() === '') return failField('main-yearsInBusiness', 'Years in Business is required.', 1);
+      if (Number(businessWork.yearsInBusiness) < 0) return failField('main-yearsInBusiness', 'Years in business cannot be negative.', 1);
+      if (!String(businessWork.businessAddress || '').trim()) return failField('main-businessAddress', 'Business Address is required.', 1);
+    }
+    if (businessWork.occupationType === 'Job / Employee') {
+      if (!String(businessWork.jobTitle || '').trim()) return failField('main-jobTitle', 'Job Title is required.', 1);
+      if (!String(businessWork.employer || '').trim()) return failField('main-employer', 'Employer / Company is required.', 1);
+      if (!String(businessWork.designation || '').trim()) return failField('main-designation', 'Designation is required.', 1);
+      if (String(businessWork.yearsInRole || '').trim() === '') return failField('main-yearsInRole', 'Years in Role is required.', 1);
+      if (Number(businessWork.yearsInRole) < 0) return failField('main-yearsInRole', 'Years in role cannot be negative.', 1);
+      if (!String(businessWork.workAddress || '').trim()) return failField('main-workAddress', 'Work Address is required.', 1);
+    }
+    if (businessWork.occupationType === 'Professional') {
+      if (!String(businessWork.profession || '').trim()) return failField('main-profession', 'Profession is required.', 1);
+      if (!String(businessWork.organization || '').trim()) return failField('main-organization', 'Organization / Practice is required.', 1);
+      if (String(businessWork.yearsExperience || '').trim() === '') return failField('main-yearsExperience', 'Years of Experience is required.', 1);
+      if (Number(businessWork.yearsExperience) < 0) return failField('main-yearsExperience', 'Years of experience cannot be negative.', 1);
+      if (!String(businessWork.workAddress || '').trim()) return failField('main-profWorkAddress', 'Work Address is required.', 1);
+    }
+    if (businessWork.occupationType === 'Farmer') {
+      if (!String(businessWork.farmType || '').trim()) return failField('main-farmType', 'Farm Type is required.', 1);
+      if (String(businessWork.yearsFarming || '').trim() === '') return failField('main-yearsFarming', 'Years in Farming is required.', 1);
+      if (Number(businessWork.yearsFarming) < 0) return failField('main-yearsFarming', 'Years in farming cannot be negative.', 1);
+      if (!String(businessWork.farmAddress || '').trim()) return failField('main-farmAddress', 'Farm Address is required.', 1);
+    }
+    if (businessWork.occupationType === 'Retired') {
+      if (!String(businessWork.previousOccupation || '').trim()) return failField('main-previousOccupation', 'Previous Occupation is required.', 1);
+      if (String(businessWork.retirementYear || '').trim() === '') return failField('main-retirementYear', 'Retirement Year is required.', 1);
+      const ry = Number(businessWork.retirementYear);
+      const currYr = new Date().getFullYear();
+      if (Number.isNaN(ry) || ry < 1900 || ry > currYr) {
+        return failField('main-retirementYear', `Retirement Year must be between 1900 and ${currYr}.`, 1);
+      }
+    }
     if (businessWork.occupationType === 'Not Working' && !businessWork.notWorkingDetails.trim()) {
       return failField('main-notWorkingDetails', 'Please share the current status or reason for not working.', 1);
     }
     if (businessWork.occupationType === 'Other' && !businessWork.otherOccupationDetails.trim()) {
       return failField('main-otherOccupationDetails', 'Please describe your occupation.', 1);
-    }
-    if (businessWork.yearsInBusiness !== '' && Number(businessWork.yearsInBusiness) < 0) {
-      return failField('main-yearsInBusiness', 'Years in business cannot be negative.', 1);
     }
     setError('');
     return true;
@@ -355,11 +391,7 @@ export default function FamilyForm() {
       const cleanMembers = familyMembers.map((m) => {
         const out = { ...m };
         delete out._formId;
-        if (typeof out.firstName === 'string') out.firstName = out.firstName.trim();
-        if (typeof out.surname === 'string') out.surname = out.surname.trim();
-        if (!out.fullName && (out.firstName || out.surname)) {
-          out.fullName = `${out.firstName} ${out.surname}`.trim();
-        } else if (typeof out.fullName === 'string') {
+        if (typeof out.fullName === 'string') {
           out.fullName = out.fullName.trim();
         }
         return out;
@@ -506,41 +538,51 @@ export default function FamilyForm() {
 
               {(businessWork.occupationType === 'Business Owner' || businessWork.occupationType === 'Self Employed') && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-bold text-gray-800 mb-3">Business Details</h3>
-                  <Field label="Business Name"><input className={inputCls} placeholder="e.g. Acme Corp" value={businessWork.businessName} onChange={(e) => setBW('businessName', e.target.value.trimStart())} /></Field>
-                  <Field label="Business Type">
-                    <select className={inputCls} value={businessWork.businessType} onChange={(e) => setBW('businessType', e.target.value)}>
+                  <h3 className="text-sm font-bold text-gray-800 mb-3">Business Details <span className="text-red-500">(All fields required)</span></h3>
+                  <Field label="Business Name" required><input id="main-businessName" className={inputCls} placeholder="e.g. Acme Corp" value={businessWork.businessName} onChange={(e) => setBW('businessName', e.target.value.trimStart())} />{showFieldError('main-businessName')}</Field>
+                  <Field label="Business Type" required>
+                    <select id="main-businessType" className={inputCls} value={businessWork.businessType} onChange={(e) => setBW('businessType', e.target.value)}>
                       <option value="">Select Type</option>
                       <option>Retail</option><option>Wholesale</option><option>Manufacturing</option><option>Agriculture</option>
                       <option>IT / Technology</option><option>Education</option><option>Healthcare</option><option>Construction</option>
                       <option>Transport</option><option>Finance</option><option>Food</option><option>Restaurant</option>
                       <option>Service</option><option>Real Estate</option><option>Professional Services</option><option>Other</option>
                     </select>
+                    {showFieldError('main-businessType')}
                   </Field>
-                  <Field label="Industry"><input className={inputCls} placeholder="e.g. Technology" value={businessWork.industry} onChange={(e) => setBW('industry', e.target.value.trimStart())} /></Field>
-                  <Field label="Years in Business"><input id="main-yearsInBusiness" type="number" min="0" className={inputCls} placeholder="0" value={businessWork.yearsInBusiness} onChange={(e) => setBW('yearsInBusiness', e.target.value)} />{showFieldError('main-yearsInBusiness')}</Field>
-                  <Field label="Business Address"><input className={inputCls} placeholder="123 Business Rd, Suite 100" value={businessWork.businessAddress} onChange={(e) => setBW('businessAddress', e.target.value.trimStart())} /></Field>
+                  <Field label="Industry" required><input id="main-industry" className={inputCls} placeholder="e.g. Technology" value={businessWork.industry} onChange={(e) => setBW('industry', e.target.value.trimStart())} />{showFieldError('main-industry')}</Field>
+                  <Field label="Years in Business" required><input id="main-yearsInBusiness" type="number" min="0" className={inputCls} placeholder="0" value={businessWork.yearsInBusiness} onChange={(e) => setBW('yearsInBusiness', e.target.value)} />{showFieldError('main-yearsInBusiness')}</Field>
+                  <Field label="Business Address" required><input id="main-businessAddress" className={inputCls} placeholder="123 Business Rd, Suite 100" value={businessWork.businessAddress} onChange={(e) => setBW('businessAddress', e.target.value.trimStart())} />{showFieldError('main-businessAddress')}</Field>
                 </div>
               )}
 
               {businessWork.occupationType === 'Job / Employee' && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-bold text-gray-800 mb-3">Employment Details</h3>
-                  <Field label="Job Title"><input className={inputCls} placeholder="e.g. Software Engineer" value={businessWork.jobTitle} onChange={(e) => setBW('jobTitle', e.target.value.trimStart())} /></Field>
-                  <Field label="Employer / Company"><input className={inputCls} value={businessWork.employer} onChange={(e) => setBW('employer', e.target.value.trimStart())} /></Field>
-                  <Field label="Designation"><input className={inputCls} value={businessWork.designation} onChange={(e) => setBW('designation', e.target.value.trimStart())} /></Field>
-                  <Field label="Years in Role"><input type="number" min="0" className={inputCls} value={businessWork.yearsInRole} onChange={(e) => setBW('yearsInRole', e.target.value)} /></Field>
-                  <Field label="Work Address"><input className={inputCls} value={businessWork.workAddress} onChange={(e) => setBW('workAddress', e.target.value.trimStart())} /></Field>
+                  <h3 className="text-sm font-bold text-gray-800 mb-3">Employment Details <span className="text-red-500">(All fields required)</span></h3>
+                  <Field label="Job Title" required><input id="main-jobTitle" className={inputCls} placeholder="e.g. Software Engineer" value={businessWork.jobTitle} onChange={(e) => setBW('jobTitle', e.target.value.trimStart())} />{showFieldError('main-jobTitle')}</Field>
+                  <Field label="Employer / Company" required><input id="main-employer" className={inputCls} value={businessWork.employer} onChange={(e) => setBW('employer', e.target.value.trimStart())} />{showFieldError('main-employer')}</Field>
+                  <Field label="Designation" required><input id="main-designation" className={inputCls} value={businessWork.designation} onChange={(e) => setBW('designation', e.target.value.trimStart())} />{showFieldError('main-designation')}</Field>
+                  <Field label="Years in Role" required><input id="main-yearsInRole" type="number" min="0" className={inputCls} value={businessWork.yearsInRole} onChange={(e) => setBW('yearsInRole', e.target.value)} />{showFieldError('main-yearsInRole')}</Field>
+                  <Field label="Work Address" required><input id="main-workAddress" className={inputCls} value={businessWork.workAddress} onChange={(e) => setBW('workAddress', e.target.value.trimStart())} />{showFieldError('main-workAddress')}</Field>
                 </div>
               )}
 
               {businessWork.occupationType === 'Professional' && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-bold text-gray-800 mb-3">Professional Details</h3>
-                  <Field label="Profession"><input className={inputCls} placeholder="e.g. Doctor, Lawyer, Consultant" value={businessWork.profession} onChange={(e) => setBW('profession', e.target.value.trimStart())} /></Field>
-                  <Field label="Organization / Practice"><input className={inputCls} value={businessWork.organization} onChange={(e) => setBW('organization', e.target.value.trimStart())} /></Field>
-                  <Field label="Years of Experience"><input type="number" min="0" className={inputCls} value={businessWork.yearsExperience} onChange={(e) => setBW('yearsExperience', e.target.value)} /></Field>
-                  <Field label="Work Address"><input className={inputCls} value={businessWork.workAddress} onChange={(e) => setBW('workAddress', e.target.value.trimStart())} /></Field>
+                  <h3 className="text-sm font-bold text-gray-800 mb-3">Professional Details <span className="text-red-500">(All fields required)</span></h3>
+                  <Field label="Profession" required><input id="main-profession" className={inputCls} placeholder="e.g. Doctor, Lawyer, Consultant" value={businessWork.profession} onChange={(e) => setBW('profession', e.target.value.trimStart())} />{showFieldError('main-profession')}</Field>
+                  <Field label="Organization / Practice" required><input id="main-organization" className={inputCls} value={businessWork.organization} onChange={(e) => setBW('organization', e.target.value.trimStart())} />{showFieldError('main-organization')}</Field>
+                  <Field label="Years of Experience" required><input id="main-yearsExperience" type="number" min="0" className={inputCls} value={businessWork.yearsExperience} onChange={(e) => setBW('yearsExperience', e.target.value)} />{showFieldError('main-yearsExperience')}</Field>
+                  <Field label="Work Address" required><input id="main-profWorkAddress" className={inputCls} value={businessWork.workAddress} onChange={(e) => setBW('workAddress', e.target.value.trimStart())} />{showFieldError('main-profWorkAddress')}</Field>
+                </div>
+              )}
+
+              {businessWork.occupationType === 'Farmer' && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-bold text-gray-800 mb-3">Farming Details <span className="text-red-500">(All fields required)</span></h3>
+                  <Field label="Farm Type" required><input id="main-farmType" className={inputCls} placeholder="e.g. Dairy, Agriculture, Poultry, Mixed" value={businessWork.farmType} onChange={(e) => setBW('farmType', e.target.value.trimStart())} />{showFieldError('main-farmType')}</Field>
+                  <Field label="Years in Farming" required><input id="main-yearsFarming" type="number" min="0" className={inputCls} placeholder="0" value={businessWork.yearsFarming} onChange={(e) => setBW('yearsFarming', e.target.value)} />{showFieldError('main-yearsFarming')}</Field>
+                  <Field label="Farm Address" required><input id="main-farmAddress" className={inputCls} placeholder="Village, Tehsil, District" value={businessWork.farmAddress} onChange={(e) => setBW('farmAddress', e.target.value.trimStart())} />{showFieldError('main-farmAddress')}</Field>
                 </div>
               )}
 
@@ -615,9 +657,9 @@ export default function FamilyForm() {
 
               {businessWork.occupationType === 'Retired' && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-bold text-gray-800 mb-3">Retirement Details</h3>
-                  <Field label="Previous Occupation"><input className={inputCls} value={businessWork.previousOccupation} onChange={(e) => setBW('previousOccupation', e.target.value.trimStart())} /></Field>
-                  <Field label="Retirement Year"><input type="number" min="1900" className={inputCls} value={businessWork.retirementYear} onChange={(e) => setBW('retirementYear', e.target.value)} /></Field>
+                  <h3 className="text-sm font-bold text-gray-800 mb-3">Retirement Details <span className="text-red-500">(All fields required)</span></h3>
+                  <Field label="Previous Occupation" required><input id="main-previousOccupation" className={inputCls} value={businessWork.previousOccupation} onChange={(e) => setBW('previousOccupation', e.target.value.trimStart())} />{showFieldError('main-previousOccupation')}</Field>
+                  <Field label="Retirement Year" required><input id="main-retirementYear" type="number" min="1900" className={inputCls} value={businessWork.retirementYear} onChange={(e) => setBW('retirementYear', e.target.value)} />{showFieldError('main-retirementYear')}</Field>
                 </div>
               )}
 

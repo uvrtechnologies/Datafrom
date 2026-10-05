@@ -141,9 +141,17 @@ function validateFamilyMember(member, idx) {
     if (pctErr) return pctErr;
   }
 
-  if (member.workStatus === 'Working' && (!isEmptyObj(member.businessDetails) || !isEmptyObj(member.educationDetails))) {
+  if (member.workStatus === 'Working') {
+    const wd = member.workDetails || {};
+    if (!String(wd.occupation || '').trim()) return `${pos}: Occupation / Job Title is required for Working status.`;
+    if (!String(wd.organization || '').trim()) return `${pos}: Organization / Company is required for Working status.`;
+    if (!String(wd.designation || '').trim()) return `${pos}: Designation is required for Working status.`;
   }
-  if (member.workStatus === 'Business' && (!isEmptyObj(member.workDetails) || !isEmptyObj(member.educationDetails))) {
+
+  if (member.workStatus === 'Business') {
+    const bd = member.businessDetails || {};
+    if (!String(bd.businessName || '').trim()) return `${pos}: Business Name is required for Business status.`;
+    if (!bd.businessType) return `${pos}: Business Type is required for Business status.`;
   }
 
   return null;
@@ -319,16 +327,81 @@ async function submitFamily(req, res, next) {
       );
       if (pctErr) return res.status(400).json({ success: false, message: pctErr });
     }
+    if (businessWork.occupationType === 'Business Owner' || businessWork.occupationType === 'Self Employed') {
+      if (!String(businessWork.businessName || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Business Name is required.' });
+      }
+      if (!businessWork.businessType) {
+        return res.status(400).json({ success: false, message: 'Business Type is required.' });
+      }
+      if (!String(businessWork.industry || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Industry is required.' });
+      }
+      if (String(businessWork.yearsInBusiness || '').trim() === '') {
+        return res.status(400).json({ success: false, message: 'Years in Business is required.' });
+      }
+      if (Number(businessWork.yearsInBusiness) < 0) {
+        return res.status(400).json({ success: false, message: 'Years in business cannot be negative.' });
+      }
+      if (!String(businessWork.businessAddress || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Business Address is required.' });
+      }
+    }
+    if (businessWork.occupationType === 'Job / Employee') {
+      if (!String(businessWork.jobTitle || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Job Title is required.' });
+      }
+      if (!String(businessWork.employer || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Employer / Company is required.' });
+      }
+      if (!String(businessWork.designation || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Designation is required.' });
+      }
+      if (String(businessWork.yearsInRole || '').trim() === '') {
+        return res.status(400).json({ success: false, message: 'Years in Role is required.' });
+      }
+      if (Number(businessWork.yearsInRole) < 0) {
+        return res.status(400).json({ success: false, message: 'Years in role cannot be negative.' });
+      }
+      if (!String(businessWork.workAddress || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Work Address is required.' });
+      }
+    }
+    if (businessWork.occupationType === 'Professional') {
+      if (!String(businessWork.profession || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Profession is required.' });
+      }
+      if (!String(businessWork.organization || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Organization / Practice is required.' });
+      }
+      if (String(businessWork.yearsExperience || '').trim() === '') {
+        return res.status(400).json({ success: false, message: 'Years of Experience is required.' });
+      }
+      if (Number(businessWork.yearsExperience) < 0) {
+        return res.status(400).json({ success: false, message: 'Years of experience cannot be negative.' });
+      }
+      if (!String(businessWork.workAddress || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Work Address is required.' });
+      }
+    }
+    if (businessWork.occupationType === 'Retired') {
+      if (!String(businessWork.previousOccupation || '').trim()) {
+        return res.status(400).json({ success: false, message: 'Previous Occupation is required.' });
+      }
+      if (String(businessWork.retirementYear || '').trim() === '') {
+        return res.status(400).json({ success: false, message: 'Retirement Year is required.' });
+      }
+      const ry = Number(businessWork.retirementYear);
+      const currYr = new Date().getFullYear();
+      if (Number.isNaN(ry) || ry < 1900 || ry > currYr) {
+        return res.status(400).json({ success: false, message: `Retirement Year must be between 1900 and ${currYr}.` });
+      }
+    }
     if (businessWork.occupationType === 'Not Working' && !String(businessWork.notWorkingDetails || '').trim()) {
       return res.status(400).json({ success: false, message: 'Please share the current status or reason for not working.' });
     }
     if (businessWork.occupationType === 'Other' && !String(businessWork.otherOccupationDetails || '').trim()) {
       return res.status(400).json({ success: false, message: 'Please describe your occupation.' });
-    }
-    if (businessWork.yearsInBusiness !== '' && businessWork.yearsInBusiness !== undefined && businessWork.yearsInBusiness !== null) {
-      if (Number(businessWork.yearsInBusiness) < 0) {
-        return res.status(400).json({ success: false, message: 'Years in business cannot be negative.' });
-      }
     }
 
     if (additionalInfo && additionalInfo.professionalProfile) {

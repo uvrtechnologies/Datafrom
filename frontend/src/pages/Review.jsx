@@ -39,6 +39,10 @@ function memberDetails(m) {
   const wd = m.workDetails || {};
   const bd = m.businessDetails || {};
   const ed = m.educationDetails || {};
+  const fd = m.farmerDetails || {};
+  const rd = m.retiredDetails || {};
+  const hd = m.housewifeDetails || {};
+  const nwd = m.notWorkingDetails || '';
   const lines = [];
   if (m.workStatus === 'Working') {
     if (wd.occupation) lines.push(`Occupation: ${wd.occupation}`);
@@ -49,6 +53,17 @@ function memberDetails(m) {
     if (bd.businessName) lines.push(`Business: ${bd.businessName}`);
     if (bd.businessType) lines.push(`Business Type: ${bd.businessType}`);
     if (bd.otherDetails) lines.push(`Other Details: ${bd.otherDetails}`);
+  } else if (m.workStatus === 'Farmer') {
+    if (fd.farmType) lines.push(`Farm Type: ${fd.farmType}`);
+    if (String(fd.yearsFarming || '').trim() !== '') lines.push(`Years in Farming: ${fd.yearsFarming}`);
+    if (fd.farmAddress) lines.push(`Farm Address: ${fd.farmAddress}`);
+  } else if (m.workStatus === 'Retired') {
+    if (rd.previousOccupation) lines.push(`Previous Occupation: ${rd.previousOccupation}`);
+    if (String(rd.retirementYear || '').trim() !== '') lines.push(`Retirement Year: ${rd.retirementYear}`);
+  } else if (m.workStatus === 'Housewife') {
+    if (hd.activities) lines.push(`Activities: ${hd.activities}`);
+  } else if (m.workStatus === 'Not Working') {
+    if (nwd) lines.push(`Status / Reason: ${nwd}`);
   } else if (m.workStatus === 'Student') {
     if (ed.instituteName) lines.push(`School/College: ${ed.instituteName}`);
     if (ed.educationLevel) {
@@ -59,8 +74,7 @@ function memberDetails(m) {
     if (ed.educationLevel === 'Other Special' && ed.educationName) {
       lines.push(`Education Name: ${ed.educationName}`);
     }
-    const stream = ed.streamOrSubject || ed.otherSubjectOrCourse;
-    if (stream) lines.push(`Stream/Subject: ${stream}`);
+    if (ed.streamOrSubject) lines.push(`Stream/Subject: ${ed.streamOrSubject}`);
     if (ed.courseOrDegree) lines.push(`Course/Degree: ${ed.courseOrDegree}`);
     if (ed.educationStatus) lines.push(`Education Status: ${ed.educationStatus}`);
     if (ed.resultType) {
@@ -87,9 +101,7 @@ export default function Review({
       </div>
 
       <SectionCard icon="👤" title="Personal Details" onEdit={() => onEditStep(1)}>
-        <p className="text-sm"><span className="font-semibold">Full Name:</span> {buildDisplayName(mainMember.firstName, mainMember.surname, mainMember.fullName) || '—'}</p>
-        {mainMember.firstName && <p className="text-sm"><span className="font-semibold">First Name:</span> {mainMember.firstName}</p>}
-        {mainMember.surname && <p className="text-sm"><span className="font-semibold">Surname:</span> {mainMember.surname}</p>}
+        <p className="text-sm"><span className="font-semibold">Full Name:</span> {mainMember.fullName || '—'}</p>
         <p className="text-sm"><span className="font-semibold">DOB:</span> {mainMember.dateOfBirth || '—'}</p>
         <p className="text-sm"><span className="font-semibold">Email:</span> {mainMember.email || '—'}</p>
         <p className="text-sm"><span className="font-semibold">Mobile:</span> {mainMember.mobileNumber || '—'}</p>
@@ -129,11 +141,48 @@ export default function Review({
 
       <SectionCard icon="💼" title="Your Business / Work" onEdit={() => onEditStep(1)} empty={!businessWork.occupationType}>
         <p className="text-sm"><span className="font-semibold">Current Occupation:</span> {businessWork.occupationType || '—'}</p>
-        {businessWork.businessName && (
-          <span className="inline-block mt-2 text-xs font-bold bg-brand-100 text-brand-700 px-2 py-1 rounded">
-            {businessWork.businessName}
-          </span>
+
+        {(businessWork.occupationType === 'Business Owner' || businessWork.occupationType === 'Self Employed') && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            {businessWork.businessName && (
+              <span className="inline-block text-xs font-bold bg-brand-100 text-brand-700 px-2 py-1 rounded">
+                {businessWork.businessName}
+              </span>
+            )}
+            {businessWork.businessType && <p className="text-sm"><span className="font-semibold">Business Type:</span> {businessWork.businessType}</p>}
+            {businessWork.industry && <p className="text-sm"><span className="font-semibold">Industry:</span> {businessWork.industry}</p>}
+            {String(businessWork.yearsInBusiness || '').trim() !== '' && <p className="text-sm"><span className="font-semibold">Years in Business:</span> {businessWork.yearsInBusiness}</p>}
+            {businessWork.businessAddress && <p className="text-sm"><span className="font-semibold">Business Address:</span> {businessWork.businessAddress}</p>}
+          </div>
         )}
+
+        {businessWork.occupationType === 'Job / Employee' && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            {businessWork.jobTitle && <p className="text-sm"><span className="font-semibold">Job Title:</span> {businessWork.jobTitle}</p>}
+            {businessWork.employer && <p className="text-sm"><span className="font-semibold">Employer / Company:</span> {businessWork.employer}</p>}
+            {businessWork.designation && <p className="text-sm"><span className="font-semibold">Designation:</span> {businessWork.designation}</p>}
+            {String(businessWork.yearsInRole || '').trim() !== '' && <p className="text-sm"><span className="font-semibold">Years in Role:</span> {businessWork.yearsInRole}</p>}
+            {businessWork.workAddress && <p className="text-sm"><span className="font-semibold">Work Address:</span> {businessWork.workAddress}</p>}
+          </div>
+        )}
+
+        {businessWork.occupationType === 'Professional' && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            {businessWork.profession && <p className="text-sm"><span className="font-semibold">Profession:</span> {businessWork.profession}</p>}
+            {businessWork.organization && <p className="text-sm"><span className="font-semibold">Organization / Practice:</span> {businessWork.organization}</p>}
+            {String(businessWork.yearsExperience || '').trim() !== '' && <p className="text-sm"><span className="font-semibold">Years of Experience:</span> {businessWork.yearsExperience}</p>}
+            {businessWork.workAddress && <p className="text-sm"><span className="font-semibold">Work Address:</span> {businessWork.workAddress}</p>}
+          </div>
+        )}
+
+        {businessWork.occupationType === 'Farmer' && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            {businessWork.farmType && <p className="text-sm"><span className="font-semibold">Farm Type:</span> {businessWork.farmType}</p>}
+            {String(businessWork.yearsFarming || '').trim() !== '' && <p className="text-sm"><span className="font-semibold">Years in Farming:</span> {businessWork.yearsFarming}</p>}
+            {businessWork.farmAddress && <p className="text-sm"><span className="font-semibold">Farm Address:</span> {businessWork.farmAddress}</p>}
+          </div>
+        )}
+
         {businessWork.occupationType === 'Student' && (
           <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
             {businessWork.institutionName && <p className="text-sm"><span className="font-semibold">Institution:</span> {businessWork.institutionName}</p>}
@@ -159,6 +208,25 @@ export default function Review({
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {businessWork.occupationType === 'Retired' && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            {businessWork.previousOccupation && <p className="text-sm"><span className="font-semibold">Previous Occupation:</span> {businessWork.previousOccupation}</p>}
+            {String(businessWork.retirementYear || '').trim() !== '' && <p className="text-sm"><span className="font-semibold">Retirement Year:</span> {businessWork.retirementYear}</p>}
+          </div>
+        )}
+
+        {businessWork.occupationType === 'Not Working' && businessWork.notWorkingDetails && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            <p className="text-sm"><span className="font-semibold">Status / Reason:</span> {businessWork.notWorkingDetails}</p>
+          </div>
+        )}
+
+        {businessWork.occupationType === 'Other' && businessWork.otherOccupationDetails && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+            <p className="text-sm"><span className="font-semibold">Description:</span> {businessWork.otherOccupationDetails}</p>
           </div>
         )}
       </SectionCard>

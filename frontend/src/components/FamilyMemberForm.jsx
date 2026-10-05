@@ -8,10 +8,9 @@ const EDUCATION_LEVELS = ['School', 'College', 'Diploma', 'Professional Degree',
 const EDUCATION_STATUS = ['Currently Studying', 'Completed', 'Other'];
 const BUSINESS_TYPES = ['Retail', 'Wholesale', 'Manufacturing', 'Agriculture', 'IT / Technology', 'Education', 'Healthcare', 'Construction', 'Transport', 'Finance', 'Food', 'Restaurant', 'Service', 'Real Estate', 'Professional Services', 'Other'];
 const CLASS_REQUIRED_LEVELS = ['School', 'College', 'Diploma', 'Professional Degree', 'Master Degree', 'Other Special'];
-const STREAM_REQUIRED_LEVELS = [];
 const COURSE_REQUIRED_LEVELS = ['College', 'Diploma', 'Professional Degree', 'Master Degree'];
 
-const NAME_REGEX = /^[A-Za-z\s]+$/;
+const NAME_REGEX = /^[A-Za-z\s.'\-]+$/;
 const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
 const errCls = 'mt-1 text-xs text-red-600';
 let familyMemberFormSequence = 0;
@@ -50,7 +49,7 @@ function validateNameForMember(value, label) {
   if (!trimmed) return `${label} is required.`;
   if (trimmed.length < 2) return `${label} must be at least 2 characters.`;
   if (trimmed.length > 100) return `${label} must be at most 100 characters.`;
-  if (!NAME_REGEX.test(trimmed)) return `${label} can contain letters and spaces only.`;
+  if (!NAME_REGEX.test(trimmed)) return `${label} can contain letters, spaces, dots, hyphens, and apostrophes only.`;
   return null;
 }
 
@@ -65,10 +64,13 @@ function validateMobileForMember(value) {
 
 function emptyWork() { return { occupation: '', organization: '', designation: '', otherDetails: '' }; }
 function emptyBusiness() { return { businessName: '', businessType: '', otherDetails: '' }; }
+function emptyFarmer() { return { farmType: '', yearsFarming: '', farmAddress: '' }; }
+function emptyRetired() { return { previousOccupation: '', retirementYear: '' }; }
+function emptyHousewife() { return { activities: '' }; }
 function emptyEdu() {
   return {
     instituteName: '', educationLevel: '', classOrYear: '', streamOrSubject: '',
-    courseOrDegree: '', otherSubjectOrCourse: '', educationStatus: '',
+    courseOrDegree: '', educationStatus: '',
     resultType: '', percentage: '', cgpa: '', educationName: '',
   };
 }
@@ -90,6 +92,9 @@ export function validateMember(member, idx) {
   }
   if (member.relation === 'Other' && !String(member.otherRelationship || '').trim()) {
     return invalid('otherRelationship', `${pos}: Specify Relationship is required for "Other".`);
+  }
+  if (!member.workStatus) {
+    return invalid('workStatus', `${pos}: Work Status is required.`);
   }
   if (member.workStatus === 'Other' && !String(member.otherStatus || '').trim()) {
     return invalid('otherStatus', `${pos}: Specify Status is required for "Other".`);
@@ -131,6 +136,42 @@ export function validateMember(member, idx) {
       }
     }
   }
+  if (member.workStatus === 'Working') {
+    const wd = member.workDetails || {};
+    if (!String(wd.occupation || '').trim()) return invalid('occupation', `${pos}: Occupation / Job Title is required for Working status.`);
+    if (!String(wd.organization || '').trim()) return invalid('organization', `${pos}: Organization / Company is required for Working status.`);
+    if (!String(wd.designation || '').trim()) return invalid('designation', `${pos}: Designation is required for Working status.`);
+  }
+  if (member.workStatus === 'Business') {
+    const bd = member.businessDetails || {};
+    if (!String(bd.businessName || '').trim()) return invalid('businessName', `${pos}: Business Name is required for Business status.`);
+    if (!bd.businessType) return invalid('businessType', `${pos}: Business Type is required for Business status.`);
+  }
+  if (member.workStatus === 'Farmer') {
+    const fd = member.farmerDetails || {};
+    if (!String(fd.farmType || '').trim()) return invalid('farmType', `${pos}: Farm Type is required for Farmer status.`);
+    if (String(fd.yearsFarming || '').trim() === '') return invalid('yearsFarming', `${pos}: Years in Farming is required for Farmer status.`);
+    if (Number(fd.yearsFarming) < 0) return invalid('yearsFarming', `${pos}: Years in farming cannot be negative.`);
+    if (!String(fd.farmAddress || '').trim()) return invalid('farmAddress', `${pos}: Farm Address is required for Farmer status.`);
+  }
+  if (member.workStatus === 'Retired') {
+    const rd = member.retiredDetails || {};
+    if (!String(rd.previousOccupation || '').trim()) return invalid('previousOccupation', `${pos}: Previous Occupation is required for Retired status.`);
+    if (String(rd.retirementYear || '').trim() === '') return invalid('retirementYear', `${pos}: Retirement Year is required for Retired status.`);
+    const ry = Number(rd.retirementYear);
+    const currYr = new Date().getFullYear();
+    if (Number.isNaN(ry) || ry < 1900 || ry > currYr) {
+      return invalid('retirementYear', `${pos}: Retirement Year must be between 1900 and ${currYr}.`);
+    }
+  }
+  if (member.workStatus === 'Housewife') {
+    const hd = member.housewifeDetails || {};
+    if (!String(hd.activities || '').trim()) return invalid('activities', `${pos}: Daily Activities / Responsibilities is required for Housewife status.`);
+  }
+  if (member.workStatus === 'Not Working') {
+    const nw = member.notWorkingDetails || '';
+    if (!String(nw || '').trim()) return invalid('notWorkingDetails', `${pos}: Current Status / Reason is required for Not Working status.`);
+  }
   return null;
 }
 
@@ -152,6 +193,18 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
   const setBusiness = (key, value) =>
     onChange({ ...member, businessDetails: { ...(member.businessDetails || emptyBusiness()), [key]: value } });
 
+  const setFarmer = (key, value) =>
+    onChange({ ...member, farmerDetails: { ...(member.farmerDetails || emptyFarmer()), [key]: value } });
+
+  const setRetired = (key, value) =>
+    onChange({ ...member, retiredDetails: { ...(member.retiredDetails || emptyRetired()), [key]: value } });
+
+  const setHousewife = (key, value) =>
+    onChange({ ...member, housewifeDetails: { ...(member.housewifeDetails || emptyHousewife()), [key]: value } });
+
+  const setNotWorking = (value) =>
+    onChange({ ...member, notWorkingDetails: value });
+
   const setEdu = (key, value) =>
     onChange({ ...member, educationDetails: { ...(member.educationDetails || emptyEdu()), [key]: value } });
 
@@ -171,13 +224,16 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
     if (value !== 'Working') next.workDetails = emptyWork();
     if (value !== 'Business') next.businessDetails = emptyBusiness();
     if (value !== 'Student') next.educationDetails = emptyEdu();
+    if (value !== 'Farmer') next.farmerDetails = emptyFarmer();
+    if (value !== 'Retired') next.retiredDetails = emptyRetired();
+    if (value !== 'Housewife') next.housewifeDetails = emptyHousewife();
+    if (value !== 'Not Working') next.notWorkingDetails = '';
     onChange(next);
   };
 
   const handleEducationLevel = (value) => {
     const edu = { ...(member.educationDetails || emptyEdu()), educationLevel: value };
     if (!CLASS_REQUIRED_LEVELS.includes(value)) edu.classOrYear = '';
-    if (!STREAM_REQUIRED_LEVELS.includes(value)) edu.streamOrSubject = '';
     if (!COURSE_REQUIRED_LEVELS.includes(value)) edu.courseOrDegree = '';
     if (value !== 'Other Special') edu.educationName = '';
     onChange({ ...member, educationDetails: edu });
@@ -185,9 +241,17 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
 
   const wd = member.workDetails || emptyWork();
   const bd = member.businessDetails || emptyBusiness();
+  const fd = member.farmerDetails || emptyFarmer();
+  const rd = member.retiredDetails || emptyRetired();
+  const hd = member.housewifeDetails || emptyHousewife();
+  const nwd = member.notWorkingDetails || '';
   const ed = member.educationDetails || emptyEdu();
   const showWork = member.workStatus === 'Working';
   const showBusiness = member.workStatus === 'Business';
+  const showFarmer = member.workStatus === 'Farmer';
+  const showRetired = member.workStatus === 'Retired';
+  const showHousewife = member.workStatus === 'Housewife';
+  const showNotWorking = member.workStatus === 'Not Working';
   const showStudent = member.workStatus === 'Student';
 
   const outerCls = `border rounded-xl p-4 mb-4 ${error ? 'border-red-300 bg-red-50/40' : 'border-brand-100 bg-brand-50/40'}`;
@@ -332,7 +396,10 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
 
       <div className="bg-white rounded-lg p-3 border border-gray-100 mb-1">
         <span className="text-sm font-semibold text-gray-700">Is this family member working or running a business?</span>
-        <RadioPills name={`workstatus-${index}`} options={WORK_STATUS} value={member.workStatus || ''} onChange={handleStatus} />
+        <div id={memberFieldId('workStatus')} tabIndex={-1}>
+          <RadioPills name={`workstatus-${index}`} options={WORK_STATUS} value={member.workStatus || ''} onChange={handleStatus} />
+        </div>
+        {fieldError('workStatus') && <div className={errCls}>{fieldError('workStatus')}</div>}
 
         {member.workStatus === 'Other' && (
           <div className="mt-3 pt-3 border-t border-gray-100">
@@ -345,15 +412,18 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
 
         {showWork && (
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <h4 className="text-sm font-bold text-gray-800 mb-2">Work Details</h4>
-            <Field label="Occupation / Job Title">
-              <input className={inputCls} placeholder="e.g. Software Engineer, Teacher" value={wd.occupation} onChange={(e) => setWork('occupation', e.target.value)} />
+            <h4 className="text-sm font-bold text-gray-800 mb-2">Work Details <span className="text-red-500">(All fields required)</span></h4>
+            <Field label="Occupation / Job Title" required>
+              <input id={memberFieldId('occupation')} className={inputCls} placeholder="e.g. Software Engineer, Teacher" value={wd.occupation} onChange={(e) => setWork('occupation', e.target.value)} aria-invalid={!!fieldError('occupation')} />
+              {fieldError('occupation') && <div className={errCls}>{fieldError('occupation')}</div>}
             </Field>
-            <Field label="Organization / Company / Workplace">
-              <input className={inputCls} placeholder="e.g. Acme Corp, Government School" value={wd.organization} onChange={(e) => setWork('organization', e.target.value)} />
+            <Field label="Organization / Company / Workplace" required>
+              <input id={memberFieldId('organization')} className={inputCls} placeholder="e.g. Acme Corp, Government School" value={wd.organization} onChange={(e) => setWork('organization', e.target.value)} aria-invalid={!!fieldError('organization')} />
+              {fieldError('organization') && <div className={errCls}>{fieldError('organization')}</div>}
             </Field>
-            <Field label="Designation">
-              <input className={inputCls} placeholder="e.g. Senior Analyst, Principal" value={wd.designation} onChange={(e) => setWork('designation', e.target.value)} />
+            <Field label="Designation" required>
+              <input id={memberFieldId('designation')} className={inputCls} placeholder="e.g. Senior Analyst, Principal" value={wd.designation} onChange={(e) => setWork('designation', e.target.value)} aria-invalid={!!fieldError('designation')} />
+              {fieldError('designation') && <div className={errCls}>{fieldError('designation')}</div>}
             </Field>
             <Field label="Other Work Details / Annual Income">
               <input className={inputCls} placeholder="Optional" value={wd.otherDetails} onChange={(e) => setWork('otherDetails', e.target.value)} />
@@ -363,18 +433,74 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
 
         {showBusiness && (
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <h4 className="text-sm font-bold text-gray-800 mb-2">Business Details</h4>
-            <Field label="Business Name">
-              <input className={inputCls} placeholder="e.g. Sharma General Store" value={bd.businessName} onChange={(e) => setBusiness('businessName', e.target.value)} />
+            <h4 className="text-sm font-bold text-gray-800 mb-2">Business Details <span className="text-red-500">(All fields required)</span></h4>
+            <Field label="Business Name" required>
+              <input id={memberFieldId('businessName')} className={inputCls} placeholder="e.g. Sharma General Store" value={bd.businessName} onChange={(e) => setBusiness('businessName', e.target.value)} aria-invalid={!!fieldError('businessName')} />
+              {fieldError('businessName') && <div className={errCls}>{fieldError('businessName')}</div>}
             </Field>
-            <Field label="Business Type">
-              <select className={inputCls} value={bd.businessType} onChange={(e) => setBusiness('businessType', e.target.value)}>
+            <Field label="Business Type" required>
+              <select id={memberFieldId('businessType')} className={inputCls} value={bd.businessType} onChange={(e) => setBusiness('businessType', e.target.value)} aria-invalid={!!fieldError('businessType')}>
                 <option value="">Select Type</option>
                 {BUSINESS_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
+              {fieldError('businessType') && <div className={errCls}>{fieldError('businessType')}</div>}
             </Field>
             <Field label="Other Business Details">
               <input className={inputCls} placeholder="Optional" value={bd.otherDetails} onChange={(e) => setBusiness('otherDetails', e.target.value)} />
+            </Field>
+          </div>
+        )}
+
+        {showFarmer && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <h4 className="text-sm font-bold text-gray-800 mb-2">Farming Details <span className="text-red-500">(All fields required)</span></h4>
+            <Field label="Farm Type" required>
+              <input id={memberFieldId('farmType')} className={inputCls} placeholder="e.g. Dairy, Agriculture, Poultry, Mixed" value={fd.farmType} onChange={(e) => setFarmer('farmType', e.target.value)} aria-invalid={!!fieldError('farmType')} />
+              {fieldError('farmType') && <div className={errCls}>{fieldError('farmType')}</div>}
+            </Field>
+            <Field label="Years in Farming" required>
+              <input id={memberFieldId('yearsFarming')} type="number" min="0" className={inputCls} placeholder="0" value={fd.yearsFarming} onChange={(e) => setFarmer('yearsFarming', e.target.value)} aria-invalid={!!fieldError('yearsFarming')} />
+              {fieldError('yearsFarming') && <div className={errCls}>{fieldError('yearsFarming')}</div>}
+            </Field>
+            <Field label="Farm Address" required>
+              <input id={memberFieldId('farmAddress')} className={inputCls} placeholder="Village, Tehsil, District" value={fd.farmAddress} onChange={(e) => setFarmer('farmAddress', e.target.value)} aria-invalid={!!fieldError('farmAddress')} />
+              {fieldError('farmAddress') && <div className={errCls}>{fieldError('farmAddress')}</div>}
+            </Field>
+          </div>
+        )}
+
+        {showRetired && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <h4 className="text-sm font-bold text-gray-800 mb-2">Retirement Details <span className="text-red-500">(All fields required)</span></h4>
+            <Field label="Previous Occupation" required>
+              <input id={memberFieldId('previousOccupation')} className={inputCls} placeholder="e.g. Teacher, Government Employee" value={rd.previousOccupation} onChange={(e) => setRetired('previousOccupation', e.target.value)} aria-invalid={!!fieldError('previousOccupation')} />
+              {fieldError('previousOccupation') && <div className={errCls}>{fieldError('previousOccupation')}</div>}
+            </Field>
+            <Field label="Retirement Year" required>
+              <input id={memberFieldId('retirementYear')} type="number" min="1900" className={inputCls} placeholder="e.g. 2020" value={rd.retirementYear} onChange={(e) => setRetired('retirementYear', e.target.value)} aria-invalid={!!fieldError('retirementYear')} />
+              {fieldError('retirementYear') && <div className={errCls}>{fieldError('retirementYear')}</div>}
+              {String(rd.retirementYear || '').trim() !== '' && (Number(rd.retirementYear) < 1900 || Number(rd.retirementYear) > new Date().getFullYear()) && (
+                <div className={errCls}>Retirement Year must be between 1900 and {new Date().getFullYear()}.</div>
+              )}
+            </Field>
+          </div>
+        )}
+
+        {showHousewife && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <h4 className="text-sm font-bold text-gray-800 mb-2">Household Details <span className="text-red-500">(Required)</span></h4>
+            <Field label="Daily Activities / Responsibilities" required>
+              <textarea id={memberFieldId('activities')} className={inputCls} rows={2} placeholder="e.g. Household management, Child care, Cooking" value={hd.activities} onChange={(e) => setHousewife('activities', e.target.value)} aria-invalid={!!fieldError('activities')} />
+              {fieldError('activities') && <div className={errCls}>{fieldError('activities')}</div>}
+            </Field>
+          </div>
+        )}
+
+        {showNotWorking && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <Field label="Current Status / Reason" required>
+              <textarea id={memberFieldId('notWorkingDetails')} className={inputCls} rows={2} placeholder="Please tell us your current status or reason for not working" value={nwd} onChange={(e) => setNotWorking(e.target.value)} aria-invalid={!!fieldError('notWorkingDetails')} />
+              {fieldError('notWorkingDetails') && <div className={errCls}>{fieldError('notWorkingDetails')}</div>}
             </Field>
           </div>
         )}
@@ -397,11 +523,6 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
               <Field label="Class / Year" required>
                 <input id={memberFieldId('classOrYear')} className={inputCls} placeholder="e.g. 10th, First Year, LKG" value={ed.classOrYear} onChange={(e) => setEdu('classOrYear', e.target.value)} aria-invalid={!!fieldError('classOrYear')} />
                 {fieldError('classOrYear') && <div className={errCls}>{fieldError('classOrYear')}</div>}
-              </Field>
-            )}
-            {STREAM_REQUIRED_LEVELS.includes(ed.educationLevel) && (
-              <Field label="Stream / Subject">
-                <input className={inputCls} placeholder="e.g. Science, Commerce, Mechanical" value={ed.streamOrSubject} onChange={(e) => setEdu('streamOrSubject', e.target.value)} />
               </Field>
             )}
             {COURSE_REQUIRED_LEVELS.includes(ed.educationLevel) && (
@@ -471,8 +592,6 @@ export default FamilyMemberForm;
 
 export const emptyFamilyMember = () => ({
   _formId: `family-member-${++familyMemberFormSequence}`,
-  firstName: '',
-  surname: '',
   fullName: '',
   relation: '',
   otherRelationship: '',
@@ -485,6 +604,10 @@ export const emptyFamilyMember = () => ({
   otherStatus: '',
   workDetails: emptyWork(),
   businessDetails: emptyBusiness(),
+  farmerDetails: emptyFarmer(),
+  retiredDetails: emptyRetired(),
+  housewifeDetails: emptyHousewife(),
+  notWorkingDetails: '',
   educationDetails: emptyEdu(),
   achievements: '',
   additionalRemarks: '',
