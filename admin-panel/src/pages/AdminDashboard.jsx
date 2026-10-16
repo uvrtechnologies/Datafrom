@@ -10,6 +10,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import AdminLayout from '../components/AdminLayout';
+import ExcelImportDialog from '../components/ExcelImportDialog';
 import api from '../services/api';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
@@ -28,6 +29,7 @@ import {
   IconChevronRight,
   IconSearch,
   IconUser,
+  IconFileSpreadsheet,
 } from '../components/common/Icons';
 
 function Chart({ data, color, topN = 10 }) {
@@ -79,6 +81,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [villageData, setVillageData] = useState([]);
   const [villageLoading, setVillageLoading] = useState(false);
+  const [showExcelImport, setShowExcelImport] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const [excelError, setExcelError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -96,7 +102,7 @@ export default function AdminDashboard() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     let active = true;
@@ -113,7 +119,25 @@ export default function AdminDashboard() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
+
+  const downloadExcel = async () => {
+    setExcelLoading(true);
+    setExcelError('');
+    try {
+      const { data: file } = await api.get('/export/excel', { responseType: 'blob' });
+      const objectUrl = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'family-records.xlsx';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (requestError) {
+      setExcelError(requestError.response?.data?.message || 'Failed to download the Excel workbook.');
+    } finally {
+      setExcelLoading(false);
+    }
+  };
 
   return (
     <AdminLayout title="Dashboard">
@@ -127,14 +151,40 @@ export default function AdminDashboard() {
             Summary of all collected family and business information.
           </p>
         </div>
-        <div className="text-xs text-gray-400 font-medium">
-          {data && (
-            <>
-              Updated <span className="text-gray-600">{new Date().toLocaleTimeString()}</span>
-            </>
-          )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="mr-1 text-xs font-medium text-gray-400">
+            {data && (
+              <>
+                Updated <span className="text-gray-600">{new Date().toLocaleTimeString()}</span>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={downloadExcel}
+            disabled={excelLoading}
+            className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60"
+          >
+            <IconFileSpreadsheet size={15} />
+            {excelLoading ? 'Downloading...' : 'Download Excel'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowExcelImport(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            <IconFileSpreadsheet size={15} />
+            Upload Excel
+          </button>
         </div>
       </div>
+
+      {excelError && (
+        <div className="mb-6 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <IconAlertCircle size={17} className="mt-0.5 shrink-0" />
+          {excelError}
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (
@@ -454,6 +504,12 @@ export default function AdminDashboard() {
             )}
           </div>
         </div>
+      )}
+      {showExcelImport && (
+        <ExcelImportDialog
+          onClose={() => setShowExcelImport(false)}
+          onImported={() => setRefreshKey((key) => key + 1)}
+        />
       )}
     </AdminLayout>
   );

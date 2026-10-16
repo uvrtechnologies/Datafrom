@@ -41,6 +41,7 @@ All three apps run independently with their own `package.json`, `.env`, and dev 
 ### admin-panel/ — Admin Dashboard (port **5174**)
 - Admin login at `/login` (JWT-based auth, bcrypt password hashing)
 - **Dashboard** — Total Records, Today's Submissions, Business Owners, Professionals / Children counts, Recent Submissions table
+- **Excel round trip** — download all family records, preview `.xlsx` / `.xls` updates, and confirm additions or updates from the dashboard
 - **Records** — search, state/city/occupation/business-type filters, pagination, CSV + Excel export
 - **Record Detail** — collapsible sections for Personal, Address, Family, Business, Children, Additional info; status badge
 - **Analytics** — bar charts (Recharts) for by-State, by-City, by-Occupation
@@ -60,9 +61,13 @@ All three apps run independently with their own `package.json`, `.env`, and dev 
   - `PUT    /api/admin/families/:id` — update a record
   - `DELETE /api/admin/families/:id` — delete a record (requires `admin`/`superadmin` role)
   - `GET    /api/admin/export` — full filtered row set for client-side Excel/CSV/PDF generation
+  - `GET    /api/export/excel` — download all records in a round-trip workbook (or an empty-data template)
+  - `POST   /api/import/excel/preview` — validate and preview an `.xlsx` / `.xls` workbook without saving
+  - `POST   /api/import/excel/confirm` — apply a validated preview, matching existing records by `submissionId`
 - Security: Helmet, CORS allow-list, Mongo sanitization, bcrypt, JWT, express-rate-limit, mongoose validation + unique indexes
 - DB models: `Family` (submissions), `Admin` (dashboard users), `FamilyKey` (optional key-based gating)
 - Seed scripts: `seed:admin` — creates first superadmin from `.env`
+- Excel workflow tests: run `npm test` from `backend/`
 
 ## Prerequisites
 
@@ -120,6 +125,8 @@ with `SEED_ADMIN_MOBILE` if their mobile number is missing.
 PORT=5000
 NODE_ENV=development
 MONGO_URI=mongodb://localhost:27017/family_business_db
+# Optional: override Node's DNS servers (comma-separated IP addresses), e.g. for Atlas SRV lookup issues
+# MONGO_DNS_SERVERS=8.8.8.8
 JWT_SECRET=replace_this_with_a_long_random_string
 JWT_EXPIRES_IN=8h
 CLIENT_ORIGIN=http://localhost:5173,http://localhost:5174
@@ -202,7 +209,8 @@ project-root/
 
 ## Notes & Intentional Simplifications
 
-- Exports (Excel / CSV / PDF) are generated **client-side** from JSON the API returns. Works well up to tens of thousands of rows; for very large datasets, swap in a server-side generator using `exceljs`, `json2csv`, or `pdfkit` via the existing `/api/admin/export` endpoint.
+- Existing CSV/PDF and family-table exports remain unchanged. The dashboard round-trip Excel workbook is generated server-side; its import parser accepts `.xlsx` and `.xls`.
+- The dashboard's round-trip workbook uses Mongo field paths as headers; `familyMembers` and `children.list` are JSON-array cells. The upload is limited to 5 MB and 5,000 records. Blank optional cells are ignored unless “Clear optional fields” is selected; omitted records are never deleted.
 - The **"Edit Record"** button on the admin record detail is a visual placeholder matching the mockups. The backend endpoint `PUT /api/admin/families/:id` already exists and is fully functional — wire up an edit form on the frontend when you're ready.
 - Admin roles are modeled (`superadmin`, `admin`, `viewer`) but only `DELETE` is role-gated today. Extend `requireRole` guards onto `PUT` / `GET /export` etc. as your policy requires.
 - Family Key gating (one unique key per submission) is implemented backend-side in the models and a seed script, but the admin key-generation UI hasn't been wired up. Use `node backend/seed/createTestKeys.js 5` or add a `POST /api/admin/keys` endpoint.

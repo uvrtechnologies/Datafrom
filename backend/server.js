@@ -9,6 +9,7 @@ const connectDB = require('./config/db');
 const { isDBConnected } = require('./config/db');
 const familyRoutes = require('./routes/familyRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const excelRoutes = require('./routes/excelRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 function validateProductionConfig() {
@@ -74,6 +75,7 @@ app.use('/api/admin', (req, res, next) => {
   }
   next();
 }, adminRoutes);
+app.use('/api', excelRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
