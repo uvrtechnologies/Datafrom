@@ -16,6 +16,18 @@ const REQUIRED_COLUMNS = [
 ];
 const ARRAY_COLUMNS = new Set(['familyMembers', 'children.list']);
 const EXCLUDED_PATHS = new Set(['_id', '__v', 'createdAt', 'updatedAt']);
+// Still stored in MongoDB and edited in the app, but deliberately left out of the
+// generated workbook so the download never contains them.
+const EXCLUDED_EXPORT_COLUMNS = new Set([
+  'mainMember.firstName',
+  'mainMember.surname',
+  'mainMember.nationality',
+  'address.sameAsCurrent',
+  'children.hasChildren',
+  'children.list',
+  'submittedAt',
+  'status',
+]);
 
 function collectColumns(schema, prefix = '') {
   return Object.entries(schema.paths).flatMap(([path, schemaType]) => {
@@ -26,8 +38,11 @@ function collectColumns(schema, prefix = '') {
   });
 }
 
-const columns = collectColumns(Family.schema);
-const columnSet = new Set(columns);
+// `columns` drives the generated workbook; `columnSet` stays schema-complete so a
+// workbook downloaded before these columns were removed can still be re-imported.
+const schemaColumns = collectColumns(Family.schema);
+const columnSet = new Set(schemaColumns);
+const columns = schemaColumns.filter((path) => !EXCLUDED_EXPORT_COLUMNS.has(path));
 const previews = new Map();
 
 function getValue(source, path) {

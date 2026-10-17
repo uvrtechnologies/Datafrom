@@ -41,7 +41,7 @@ const WORK_STATUSES = ['Working', 'Business', 'Farmer', 'Housewife', 'Not Workin
 
 const SORTABLE_COLUMNS = {
   submissionId: { key: 'submissionId', label: 'Record ID' },
-  mainMember: { key: 'mainMember.fullName', label: 'Main Member' },
+  mainMember: { key: 'mainMember.fullName', label: 'Family Head Name' },
   createdAt: { key: 'createdAt', label: 'Submitted' },
 };
 
@@ -259,7 +259,7 @@ export default function FamiliesTable() {
         const objectUrl = URL.createObjectURL(file);
         const link = document.createElement('a');
         link.href = objectUrl;
-        link.download = 'completed-family-records.xlsx';
+        link.download = 'family-details.xlsx';
         link.click();
         URL.revokeObjectURL(objectUrl);
         setExportMessage('Excel exported successfully.');
@@ -330,7 +330,7 @@ export default function FamiliesTable() {
             Manage, search, and review all submitted data collection records.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {/* <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => doExport('csv')}
@@ -349,7 +349,7 @@ export default function FamiliesTable() {
             {exportLoading.xlsx ? <Spinner size={15} /> : <IconFileSpreadsheet size={16} />}
             {exportLoading.xlsx ? 'Exporting...' : 'Export Excel'}
           </button>
-        </div>
+        </div> */}
       </div>
 
       {error && (
@@ -645,7 +645,7 @@ export default function FamiliesTable() {
                     onClick={() => toggleSort('mainMember')}
                   >
                     <span className="inline-flex items-center gap-1.5">
-                      Main Member
+                      Family Head Name
                       <SortIcon col="mainMember" />
                     </span>
                   </th>
@@ -689,9 +689,9 @@ export default function FamiliesTable() {
                     <td className="px-5 sm:px-6 py-4 whitespace-nowrap font-mono text-[12px] font-bold text-brand-700">
                       #{r.submissionId}
                     </td>
-                    <td className="px-5 sm:px-6 py-4">
-                      <div className="font-semibold text-navy-900 truncate max-w-[220px]">
-                        {r.mainMemberName}
+                    <td className="px-5 sm:px-6 py-4 align-top">
+                      <div className="font-semibold text-navy-900 break-words max-w-[220px]">
+                        {r.mainMemberName || '—'}
                       </div>
                     </td>
                     <td className="px-5 sm:px-6 py-4 text-gray-700 whitespace-nowrap">

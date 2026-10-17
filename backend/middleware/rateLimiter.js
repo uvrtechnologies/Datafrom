@@ -17,4 +17,13 @@ const loginLimiter = rateLimit({
   message: { success: false, message: 'Too many login attempts. Please try again later.' },
 });
 
-module.exports = { publicApiLimiter, loginLimiter };
+// Public account creation is stricter: it writes data to the database.
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many registration attempts. Please try again later.' },
+});
+
+module.exports = { publicApiLimiter, loginLimiter, registerLimiter };

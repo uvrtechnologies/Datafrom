@@ -1,6 +1,4 @@
 import Papa from 'papaparse';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 const COLUMNS = [
   { key: 'submissionId', label: 'Submission ID' },
@@ -31,20 +29,4 @@ export function exportToCSV(records, filename = 'families.csv') {
   link.href = URL.createObjectURL(blob);
   link.download = filename;
   link.click();
-}
-
-export function exportToPDF(records, filename = 'families.pdf') {
-  const doc = new jsPDF({ orientation: 'landscape' });
-  doc.setFontSize(14);
-  doc.text('Family & Business Submissions', 14, 15);
-  autoTable(doc, {
-    startY: 20,
-    head: [COLUMNS.map((c) => c.label)],
-    body: records.map((r) =>
-      COLUMNS.map((c) => (c.key === 'submissionDate' ? new Date(r[c.key]).toLocaleDateString() : r[c.key]))
-    ),
-    styles: { fontSize: 8 },
-    headStyles: { fillColor: [37, 99, 235] },
-  });
-  doc.save(filename);
 }
