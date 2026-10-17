@@ -3,10 +3,11 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/Admin');
 const Family = require('../models/Family');
 const FamilyKey = require('../models/FamilyKey');
-const ExcelJS = require('exceljs');
 const { getCompleteFamilyRecord } = require('../services/familyRecordSerializer');
+const { buildFamilyQuery, loadExportFamilies } = require('../services/familyExport');
+const { normalizeMobile } = require('../utils/phone');
 
-const SUBMITTED_STATUSES = ['Submitted', 'Under Review', 'Verified'];
+const DUPLICATE_ADMIN_MOBILE_MESSAGE = 'This mobile number is already registered to another admin account.';
 
 const VILLAGE_OPTIONS = [
   'Select Village',
@@ -91,81 +92,6 @@ function mergeLegacyChildren(familyPojo) {
   return { ...f, familyMembersLegacyMerged: [...baseMembers, ...synthesized] };
 }
 
-function buildFamilyQuery(params, { submittedOnly = false } = {}) {
-  const {
-    search = '', name = '', state, city, district, occupationType, businessType,
-    workStatus, status, hasChildren, dateFrom, dateTo, userType = '', category = '',
-  } = params;
-  const query = {};
-
-  const searchParts = [];
-
-  if (search) {
-    const regex = new RegExp(search.trim(), 'i');
-    searchParts.push(
-      { familyKey: regex }, { submissionId: regex },
-      { 'mainMember.fullName': regex }, { 'mainMember.firstName': regex },
-      { 'mainMember.surname': regex }, { 'mainMember.mobileNumber': regex },
-      { 'mainMember.email': regex }, { 'address.current.city': regex },
-      { 'address.current.village': regex }, { 'address.current.addressLine1': regex },
-      { 'address.current.district': regex }, { 'address.current.state': regex },
-      { 'businessWork.occupationType': regex }, { 'businessWork.businessName': regex },
-      { 'familyMembers.fullName': regex }, { 'familyMembers.firstName': regex },
-      { 'familyMembers.surname': regex }, { 'familyMembers.mobileNumber': regex },
-      { 'familyMembers.relation': regex },
-    );
-  }
-
-  if (name) {
-    const nameRegex = new RegExp(name.trim(), 'i');
-    searchParts.push(
-      { 'mainMember.fullName': nameRegex },
-      { 'mainMember.firstName': nameRegex },
-      { 'mainMember.surname': nameRegex },
-      { 'familyMembers.fullName': nameRegex },
-      { 'familyMembers.firstName': nameRegex },
-      { 'familyMembers.surname': nameRegex },
-    );
-  }
-
-  if (searchParts.length > 0) {
-    query.$or = searchParts;
-  }
-
-  if (state) query['address.current.state'] = new RegExp(`^${state}$`, 'i');
-  if (city) query['address.current.city'] = new RegExp(`^${city}$`, 'i');
-  if (params.village) query['address.current.village'] = new RegExp(`^${params.village}$`, 'i');
-  if (district) query['address.current.district'] = new RegExp(`^${district}$`, 'i');
-  if (occupationType) query['businessWork.occupationType'] = occupationType;
-
-  const effectiveType = userType || category;
-  if (effectiveType === 'Student') {
-    query['businessWork.occupationType'] = 'Student';
-  } else if (effectiveType === 'Business Owner') {
-    query['businessWork.occupationType'] = { $in: ['Business Owner', 'Self Employed'] };
-  } else if (occupationType) {
-    query['businessWork.occupationType'] = occupationType;
-  }
-
-  if (businessType) query['businessWork.businessType'] = new RegExp(businessType, 'i');
-  if (workStatus) query['familyMembers.workStatus'] = workStatus;
-  if (hasChildren !== undefined) query['children.hasChildren'] = hasChildren === 'true';
-  if (status && SUBMITTED_STATUSES.includes(status)) query.status = status;
-  else if (submittedOnly) query.status = { $in: SUBMITTED_STATUSES };
-
-  if (dateFrom || dateTo) {
-    query.submittedAt = {};
-    if (dateFrom) query.submittedAt.$gte = new Date(dateFrom);
-    if (dateTo) {
-      const endOfDate = new Date(dateTo);
-      endOfDate.setUTCHours(23, 59, 59, 999);
-      query.submittedAt.$lte = endOfDate;
-    }
-  }
-
-  return query;
-}
-
 // POST /api/admin/login
 async function login(req, res, next) {
   try {
@@ -200,7 +126,7 @@ async function createAdmin(req, res, next) {
   try {
     const name = String(req.body.name || '').trim();
     const email = String(req.body.email || '').trim().toLowerCase();
-    const mobileNumber = String(req.body.mobileNumber || '').trim();
+    const mobileNumber = normalizeMobile(req.body.mobileNumber);
     const password = String(req.body.password || '');
     const role = req.body.role === 'viewer' ? 'viewer' : 'admin';
 
@@ -210,25 +136,41 @@ async function createAdmin(req, res, next) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
     }
-    if (!/^[6-9]\d{9}$/.test(mobileNumber)) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit Indian mobile number.' });
+    if (!mobileNumber.valid) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid mobile number, including the country code when it is not +91.' });
     }
     if (password.length < 8) {
       return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
     }
 
-    const existing = await Admin.findOne({ email });
-    if (existing) {
+    const [existingByEmail, existingByMobile] = await Promise.all([
+      Admin.findOne({ email }).select('_id').lean(),
+      Admin.findOne({ mobileNumber: mobileNumber.e164 }).select('_id').lean(),
+    ]);
+    if (existingByEmail) {
       return res.status(409).json({ success: false, message: 'An admin with this email already exists.' });
+    }
+    // Admin accounts are registered accounts too: the number must be unique.
+    if (existingByMobile) {
+      return res.status(409).json({ success: false, message: DUPLICATE_ADMIN_MOBILE_MESSAGE, code: 'MOBILE_TAKEN' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const admin = await Admin.create({ name, email, mobileNumber, passwordHash, role });
-    return res.status(201).json({
-      success: true,
-      message: 'Admin account created successfully.',
-      data: { id: admin._id, name: admin.name, email: admin.email, mobileNumber: admin.mobileNumber, role: admin.role },
-    });
+    try {
+      const admin = await Admin.create({
+        name, email, mobileNumber: mobileNumber.e164, passwordHash, role,
+      });
+      return res.status(201).json({
+        success: true,
+        message: 'Admin account created successfully.',
+        data: { id: admin._id, name: admin.name, email: admin.email, mobileNumber: admin.mobileNumber, role: admin.role },
+      });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(409).json({ success: false, message: DUPLICATE_ADMIN_MOBILE_MESSAGE, code: 'MOBILE_TAKEN' });
+      }
+      throw error;
+    }
   } catch (err) {
     next(err);
   }
@@ -483,6 +425,7 @@ async function updateFamily(req, res, next) {
 
     const family = await Family.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
     if (!family) return res.status(404).json({ success: false, message: 'Family not found.' });
+
     res.json({ success: true, data: family });
   } catch (err) {
     next(err);
@@ -649,65 +592,26 @@ async function getDashboardStats(req, res, next) {
   }
 }
 
+// The workbook is generated by services/familyWorkbook, which is also reused by
+// the automatic Google Drive backup, so the download and the backup always
+// produce the identical file. The row query lives in services/familyExport and
+// the worksheet layout in services/familySheet; the fields the download must
+// never contain are never read there: Name (firstName), Surname, Nationality,
+// address.sameAsCurrent, children.hasChildren, children.list, submittedAt and
+// status.
+const { buildFamilyWorkbookBuffer } = require('../services/familyWorkbook');
+
 // GET /api/admin/export/excel
 async function exportFamiliesExcel(req, res, next) {
   try {
-    const query = buildFamilyQuery(req.query, { submittedOnly: true });
-    const { sortBy = 'createdAt', sortDir = 'desc' } = req.query;
-    const families = await Family.find(query)
-      .sort({ [sortBy]: sortDir === 'asc' ? 1 : -1 })
-      .lean();
-    const records = families.map((family) => getCompleteFamilyRecord(mergeLegacyChildren(family)).row);
-    const headerSource = records.length
-      ? records
-      : [getCompleteFamilyRecord(mergeLegacyChildren(new Family().toObject())).row];
-    const headers = [...new Set(headerSource.flatMap((record) => Object.keys(record)))];
-    const completeDetailsIndex = headers.indexOf('Complete Family Details');
-    if (completeDetailsIndex !== -1) {
-      headers.splice(completeDetailsIndex, 1);
-      headers.push('Complete Family Details');
-    }
+    const families = await loadExportFamilies(req.query);
+    const buffer = await buildFamilyWorkbookBuffer(families);
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Completed Family Records');
-    worksheet.columns = headers.map((header) => ({
-      header,
-      key: header,
-      width: header === 'Complete Family Details' ? 52 : Math.min(Math.max(header.length + 3, 18), 40),
-    }));
-    worksheet.addRows(records.map((record) => Object.fromEntries(headers.map((header) => {
-      const value = record[header] ?? '';
-      const isDateOfBirth = header.endsWith('/ Date Of Birth');
-      return [header, isDateOfBirth && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
-        ? new Date(`${value}T00:00:00.000Z`)
-        : value];
-    }))));
-    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-    worksheet.autoFilter = `A1:${worksheet.getColumn(headers.length).letter}${Math.max(1, records.length + 1)}`;
-
-    const headerRow = worksheet.getRow(1);
-    headerRow.height = 30;
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D4ED8' } };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber > 1) {
-        row.alignment = { vertical: 'top', wrapText: true };
-        let lineCount = 1;
-        row.eachCell((cell) => {
-          if (cell.value instanceof Date) cell.numFmt = 'yyyy-mm-dd hh:mm';
-          if (typeof cell.value === 'string') lineCount = Math.max(lineCount, cell.value.split('\n').length);
-        });
-        row.height = Math.min(Math.max(lineCount * 15, 20), 300);
-      }
-    });
-
-    const buffer = await workbook.xlsx.writeBuffer();
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': 'attachment; filename="completed-family-records.xlsx"',
+      'Content-Disposition': 'attachment; filename="family-details.xlsx"',
     });
-    res.send(Buffer.from(buffer));
+    res.send(buffer);
   } catch (err) {
     next(err);
   }

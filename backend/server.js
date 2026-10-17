@@ -9,7 +9,10 @@ const connectDB = require('./config/db');
 const { isDBConnected } = require('./config/db');
 const familyRoutes = require('./routes/familyRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const backupRoutes = require('./routes/backupRoutes');
 const excelRoutes = require('./routes/excelRoutes');
+const userRoutes = require('./routes/userRoutes');
+const { startBackupScheduler, stopBackupScheduler } = require('./services/backupScheduler');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 function validateProductionConfig() {
@@ -29,7 +32,6 @@ function validateProductionConfig() {
 }
 
 validateProductionConfig();
-connectDB();
 
 const app = express();
 app.disable('x-powered-by');
@@ -66,6 +68,15 @@ app.use('/api/family', (req, res, next) => {
   }
   next();
 }, familyRoutes);
+// Mounted BEFORE /api/admin — adminRoutes applies `router.use(protect)` to every
+// path under /api/admin, which would otherwise reject the backup cron endpoint's
+// own secret-based auth before it is reached.
+app.use('/api/admin/backup', (req, res, next) => {
+  if (!isDBConnected()) {
+    return res.status(503).json({ success: false, message: 'Database not connected. Set MONGO_URI in backend/.env to enable backups.' });
+  }
+  next();
+}, backupRoutes);
 app.use('/api/admin', (req, res, next) => {
   if (!isDBConnected() && req.method !== 'GET') {
     return res.status(503).json({ success: false, message: 'Database not connected. Set MONGO_URI in server/.env to enable admin actions.' });
@@ -76,10 +87,33 @@ app.use('/api/admin', (req, res, next) => {
   next();
 }, adminRoutes);
 app.use('/api', excelRoutes);
+app.use('/api/users', (req, res, next) => {
+  if (!isDBConnected()) {
+    return res.status(503).json({ success: false, message: 'Database not connected. Set MONGO_URI in backend/.env to enable accounts.' });
+  }
+  return next();
+}, userRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || '0.0.0.0';
-app.listen(PORT, HOST, () => console.log(`Server running on ${HOST}:${PORT}`));
+connectDB()
+  .then(() => {
+    const server = app.listen(PORT, HOST, () => {
+      console.log(`Server running on ${HOST}:${PORT}`);
+      startBackupScheduler();
+    });
+
+    const shutdown = () => {
+      stopBackupScheduler();
+      server.close(() => process.exit(0));
+    };
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+  })
+  .catch((err) => {
+    console.error('Database initialization failed; server was not started.', err);
+    process.exitCode = 1;
+  });

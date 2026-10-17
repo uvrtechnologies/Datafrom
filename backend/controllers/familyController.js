@@ -1,11 +1,6 @@
 const Family = require('../models/Family');
 const { generateSubmissionId } = require('../utils/generateKey');
 
-function isEmptyObj(obj) {
-  if (!obj) return true;
-  return Object.values(obj).every((v) => v == null || String(v).trim() === '');
-}
-
 const MARRIED_RELATIONSHIPS = ['Husband', 'Wife', 'Grandfather', 'Grandmother', 'Father', 'Mother'];
 const NEW_EDUCATION_LEVELS = ['School', 'College', 'Diploma', 'Professional Degree', 'Master Degree', 'Other Special'];
 const STUDENT_CLASS_REQUIRED_LEVELS = ['Primary School', 'Secondary School', 'Higher Secondary', 'Diploma', 'School', 'College', 'Professional Degree', 'Master Degree'];

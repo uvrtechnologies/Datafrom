@@ -125,11 +125,11 @@ export default function AdminDashboard() {
     setExcelLoading(true);
     setExcelError('');
     try {
-      const { data: file } = await api.get('/export/excel', { responseType: 'blob' });
+      const { data: file } = await api.get('/admin/export/excel', { responseType: 'blob' });
       const objectUrl = URL.createObjectURL(file);
       const link = document.createElement('a');
       link.href = objectUrl;
-      link.download = 'family-records.xlsx';
+      link.download = 'family-details.xlsx';
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch (requestError) {

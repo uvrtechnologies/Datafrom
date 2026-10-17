@@ -1,9 +1,12 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const Family = require('../models/Family');
+const ExcelJS = require('exceljs');
 const XLSX = require('@e965/xlsx');
 const { confirmExcel, previewExcel } = require('../controllers/excelController');
+const { exportFamiliesExcel } = require('../controllers/adminController');
 const transfer = require('../services/excelTransfer');
+const removeLegacyMobileNumberIndex = require('../services/removeLegacyMobileNumberIndex');
 
 function createRecord(overrides = {}) {
   return new Family({
@@ -62,6 +65,209 @@ function mockFamilyFind(records) {
   };
 }
 
+test('removes only a legacy unique index on the main mobile number', async () => {
+  const droppedIndexes = [];
+  const collection = {
+    collectionName: 'families',
+    async indexes() {
+      return [
+        { name: '_id_', key: { _id: 1 } },
+        { name: 'mainMember.mobileNumber_1', key: { 'mainMember.mobileNumber': 1 }, unique: true },
+        { name: 'mainMember.mobileNumber_text', key: { 'mainMember.mobileNumber': 'text' } },
+        { name: 'mobileAndStatus', key: { 'mainMember.mobileNumber': 1, status: 1 }, unique: true },
+      ];
+    },
+    async dropIndex(name) {
+      droppedIndexes.push(name);
+    },
+  };
+  const db = {
+    listCollections: () => ({ hasNext: async () => true }),
+  };
+
+  await removeLegacyMobileNumberIndex(collection, db);
+
+  assert.deepEqual(droppedIndexes, ['mainMember.mobileNumber_1']);
+});
+
+test('skips index lookup when the family collection does not exist', async () => {
+  const collection = {
+    collectionName: 'families',
+    indexes() {
+      assert.fail('Should not inspect indexes for a missing collection.');
+    },
+  };
+  const db = {
+    listCollections: () => ({ hasNext: async () => false }),
+  };
+
+  await removeLegacyMobileNumberIndex(collection, db);
+});
+
+test('admin Excel download exports only stored form values and actual family members', async () => {
+  const firstRecord = createRecord({
+    mainMember: {
+      fullName: 'Saved Main Name',
+      firstName: 'Do Not Combine',
+      surname: 'With Name',
+      gender: 'Female',
+      maritalStatus: 'Married',
+      mobileNumber: '9876543210',
+      nationality: 'Do not export',
+    },
+    businessWork: {
+      occupationType: 'Student',
+      institutionName: 'Submitted Institute',
+      educationLevel: 'Submitted Level',
+      studyYear: 'Submitted Year',
+    },
+    familyMembers: [{
+      fullName: 'Samarth Kelwa',
+      firstName: 'Do Not Combine',
+      surname: 'With Member',
+      relation: 'Son',
+      gender: 'Male',
+      maritalStatus: 'Single',
+      workStatus: 'Student',
+      educationDetails: {
+        instituteName: 'Student Ideal Academy, Datoda',
+        educationLevel: 'Primary School',
+        classOrYear: '8th',
+        educationStatus: 'Currently Studying',
+      },
+    }],
+    children: {
+      hasChildren: true,
+      list: [{ fullName: 'Not A Submitted Family Member', age: '9', gender: 'Male' }],
+    },
+  }).toObject();
+  const secondRecord = createRecord({
+    submissionId: 'F-ROUNDTRIP-2',
+    mainMember: {
+      fullName: 'Second Main User',
+      gender: 'Male',
+      maritalStatus: 'Single',
+      mobileNumber: '9876543211',
+    },
+    familyMembers: [],
+  }).toObject();
+  const thirdRecord = createRecord({
+    submissionId: 'F-ROUNDTRIP-3',
+    mainMember: {
+      fullName: 'Third Main User',
+      gender: 'Female',
+      maritalStatus: 'Married',
+      mobileNumber: '9876543212',
+    },
+    familyMembers: [
+      {
+        fullName: 'Third Family Member',
+        relation: 'Other',
+        otherRelationship: 'Cousin',
+        gender: 'Other',
+        maritalStatus: 'Single',
+        workStatus: 'Working',
+        workDetails: {
+          occupation: 'Teacher',
+          organization: 'Local School',
+          designation: 'Educator',
+          otherDetails: '  ',
+        },
+        businessDetails: {},
+        educationDetails: {},
+      },
+      {
+        fullName: 'Second Family Member',
+        relation: 'Daughter',
+        gender: 'Female',
+        maritalStatus: 'Single',
+        workStatus: 'Other',
+        otherStatus: 'Submitted status detail',
+        businessDetails: { businessName: 'Submitted Shop' },
+      },
+    ],
+  }).toObject();
+  const records = [firstRecord, secondRecord, thirdRecord];
+  const originalFind = Family.find;
+  Family.find = () => ({
+    sort() {
+      return this;
+    },
+    async lean() {
+      return records;
+    },
+  });
+
+  let workbookBuffer;
+  try {
+    await exportFamiliesExcel(
+      { query: {} },
+      {
+        set() {
+          return this;
+        },
+        send(buffer) {
+          workbookBuffer = buffer;
+        },
+      },
+      (error) => {
+        throw error;
+      }
+    );
+  } finally {
+    Family.find = originalFind;
+  }
+
+  assert.ok(workbookBuffer);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(workbookBuffer);
+  assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), ['Family Records']);
+  const worksheet = workbook.getWorksheet('Family Records');
+  assert.equal(worksheet.rowCount, 4);
+
+  const headers = worksheet.getRow(1).values.slice(1);
+  const cell = (row, header) => worksheet.getRow(row).getCell(headers.indexOf(header) + 1).value;
+  assert.ok(!headers.includes('Name'));
+  assert.ok(!headers.includes('Surname'));
+  assert.ok(!headers.includes('Nationality'));
+  assert.ok(!headers.includes('Family Key'));
+  assert.ok(!headers.includes('Family ID'));
+  assert.ok(!headers.includes('Same as Current'));
+  assert.ok(!headers.includes('Has Children'));
+  assert.ok(!headers.includes('Children'));
+  assert.ok(!headers.includes('Submitted At'));
+  assert.ok(!headers.includes('Status'));
+  assert.ok(!headers.includes('familyMembers'));
+  assert.ok(headers.includes('Occupation Type'));
+  assert.ok(headers.includes('Occupation Detail'));
+  assert.ok(!headers.some((header) => header.startsWith('businessWork.')));
+  assert.ok(headers.includes('Family Member 1 Details'));
+  assert.ok(headers.includes('Family Member 2 Details'));
+
+  assert.equal(cell(2, 'Full Name'), 'Saved Main Name');
+  assert.equal(cell(2, 'Occupation Type'), 'Student');
+  assert.match(cell(2, 'Occupation Detail'), /Institution Name: Submitted Institute/);
+  const firstMemberDetails = cell(2, 'Family Member 1 Details');
+  assert.match(firstMemberDetails, /Full Name: Samarth Kelwa/);
+  assert.match(firstMemberDetails, /Relationship: Son/);
+  assert.match(firstMemberDetails, /Institution Name: Student Ideal Academy, Datoda/);
+  assert.match(firstMemberDetails, /Education Level: Primary School/);
+  assert.match(firstMemberDetails, /Class \/ Year: 8th/);
+  assert.match(firstMemberDetails, /Education Status: Currently Studying/);
+  assert.equal(cell(2, 'Family Member 2 Details'), '');
+  assert.equal(cell(3, 'Family Member 1 Details'), '');
+  const thirdMemberDetails = cell(4, 'Family Member 1 Details');
+  assert.match(thirdMemberDetails, /Full Name: Third Family Member/);
+  assert.match(thirdMemberDetails, /Relationship: Other/);
+  assert.match(thirdMemberDetails, /Other Relationship: Cousin/);
+  assert.match(thirdMemberDetails, /Occupation: Teacher/);
+  assert.match(thirdMemberDetails, /Organization: Local School/);
+  assert.match(thirdMemberDetails, /Designation: Educator/);
+  assert.match(cell(4, 'Family Member 2 Details'), /Business Name: Submitted Shop/);
+  assert.ok(!JSON.stringify(worksheet.getSheetValues()).includes('Not A Submitted Family Member'));
+  assert.ok(!JSON.stringify(worksheet.getSheetValues()).includes('[object Object]'));
+});
+
 test('exports a round-trip template and parses XLSX and XLS nested data', async () => {
   const record = createRecord();
   await record.validate();
@@ -70,7 +276,14 @@ test('exports a round-trip template and parses XLSX and XLS nested data', async 
   assert.ok(transfer.columns.includes('mainMember.fullName'));
   assert.ok(transfer.columns.includes('address.current.village'));
   assert.ok(transfer.columns.includes('familyMembers'));
-  assert.ok(transfer.columns.includes('children.list'));
+  assert.ok(!transfer.columns.includes('mainMember.firstName'));
+  assert.ok(!transfer.columns.includes('mainMember.surname'));
+  assert.ok(!transfer.columns.includes('mainMember.nationality'));
+  assert.ok(!transfer.columns.includes('address.sameAsCurrent'));
+  assert.ok(!transfer.columns.includes('children.hasChildren'));
+  assert.ok(!transfer.columns.includes('children.list'));
+  assert.ok(!transfer.columns.includes('submittedAt'));
+  assert.ok(!transfer.columns.includes('status'));
 
   const xlsxRows = transfer.parseWorkbook({ buffer }, false).rows;
   assert.equal(xlsxRows.length, 1);
