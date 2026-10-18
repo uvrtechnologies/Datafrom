@@ -326,7 +326,10 @@ const FamilyMemberForm = React.forwardRef(function FamilyMemberForm({ member, in
               aria-label="Family member date of birth"
               max={maxDob}
               value={toDateInputValue(member.dateOfBirthOrAge)}
-              onChange={(e) => set('dateOfBirthOrAge', e.target.value)}
+              onChange={(e) => {
+                if (e.target.value) set('dateOfBirthOrAge', e.target.value);
+              }}
+              onBlur={(e) => set('dateOfBirthOrAge', e.target.value)}
             />
             <p className="mt-1 text-xs text-gray-500">Select the date from the calendar.</p>
           </>
